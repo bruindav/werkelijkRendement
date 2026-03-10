@@ -1,0 +1,151 @@
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
+import { LayoutDashboard, Building2, FileText, Settings, LogOut, ChevronDown, Menu, X } from 'lucide-react';
+
+const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+
+export default function Layout({ children }) {
+  const { user, logout, selectedYear, setSelectedYear } = useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
+  const navItems = [
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: `/jaar/${selectedYear}`, icon: Building2, label: 'Banken & Posities' },
+    { to: `/aangifte/${selectedYear}`, icon: FileText, label: 'Aangifte Export' },
+    { to: '/instellingen', icon: Settings, label: 'Instellingen' },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white flex">
+      {/* Sidebar - desktop */}
+      <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 fixed h-full">
+        {/* Logo */}
+        <div className="p-6 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/30">
+              <span className="text-lg">📊</span>
+            </div>
+            <div>
+              <p className="font-bold text-white leading-tight">Werkelijk</p>
+              <p className="text-xs text-slate-400">Rendement Box 3</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Jaar selector */}
+        <div className="p-4 border-b border-slate-800">
+          <label className="text-xs text-slate-500 uppercase tracking-wider font-medium block mb-2">Belastingjaar</label>
+          <div className="relative">
+            <select
+              value={selectedYear}
+              onChange={e => setSelectedYear(Number(e.target.value))}
+              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <ChevronDown className="absolute right-2 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 p-4 space-y-1">
+          {navItems.map(({ to, icon: Icon, label }) => {
+            const active = location.pathname === to || location.pathname.startsWith(to.split('/').slice(0,3).join('/'));
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* User */}
+        <div className="p-4 border-t border-slate-800">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-xs font-bold">
+              {user?.email?.[0]?.toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white truncate">{user?.displayName || user?.email}</p>
+              <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-slate-400 hover:text-red-400 text-sm transition-colors w-full"
+          >
+            <LogOut className="w-4 h-4" /> Uitloggen
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">📊</span>
+          <span className="font-bold">Werkelijk Rendement</span>
+        </div>
+        <button onClick={() => setMobileOpen(!mobileOpen)} className="text-slate-400">
+          {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {/* Mobile menu */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-40 bg-slate-900 pt-16">
+          <div className="p-4 border-b border-slate-800">
+            <label className="text-xs text-slate-500 uppercase tracking-wider font-medium block mb-2">Belastingjaar</label>
+            <select
+              value={selectedYear}
+              onChange={e => { setSelectedYear(Number(e.target.value)); setMobileOpen(false); }}
+              className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2"
+            >
+              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          <nav className="p-4 space-y-1">
+            {navItems.map(({ to, icon: Icon, label }) => (
+              <Link
+                key={to}
+                to={to}
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800"
+              >
+                <Icon className="w-5 h-5" /> {label}
+              </Link>
+            ))}
+          </nav>
+          <div className="p-4 border-t border-slate-800">
+            <button onClick={handleLogout} className="flex items-center gap-2 text-red-400">
+              <LogOut className="w-4 h-4" /> Uitloggen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main content */}
+      <main className="flex-1 md:ml-64 pt-16 md:pt-0 min-h-screen">
+        <div className="p-4 md:p-8 max-w-6xl mx-auto">
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}
