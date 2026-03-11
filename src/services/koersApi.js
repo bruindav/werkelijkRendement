@@ -1,16 +1,14 @@
-// Fix 6 - Via Firebase Cloud Function proxy (geen CORS, Yahoo Finance)
+// Fix 7 - Koersen apart ophalen (jan1 en dec31 sequentieel met delay)
 
 const FUNCTIONS_BASE = 'https://us-central1-werkelijkrendement.cloudfunctions.net';
 
-/**
- * Zoek aandeel op naam of ticker
- */
+const wacht = (ms) => new Promise(r => setTimeout(r, ms));
+
 export async function zoekAandeel(query) {
   try {
     const url = `${FUNCTIONS_BASE}/zoekAandeel?query=${encodeURIComponent(query)}`;
     const res = await fetch(url);
     const data = await res.json();
-
     if (data.quotes) {
       return data.quotes
         .filter(q => ['EQUITY', 'ETF', 'MUTUALFUND'].includes(q.quoteType))
@@ -29,14 +27,11 @@ export async function zoekAandeel(query) {
   }
 }
 
-/**
- * Haal historische koers op voor specifieke datum (YYYY-MM-DD)
- */
 export async function haalHistorischeKoers(ticker, datum) {
   try {
     const doelDatum = new Date(datum);
-    const period1 = Math.floor(doelDatum.getTime() / 1000) - 86400;
-    const period2 = Math.floor(doelDatum.getTime() / 1000) + 86400 * 5;
+    const period1 = Math.floor(doelDatum.getTime() / 1000) - 86400 * 3;
+    const period2 = Math.floor(doelDatum.getTime() / 1000) + 86400 * 7;
 
     const url = `${FUNCTIONS_BASE}/haalKoers?ticker=${encodeURIComponent(ticker)}&period1=${period1}&period2=${period2}`;
     const res = await fetch(url);
@@ -46,7 +41,6 @@ export async function haalHistorischeKoers(ticker, datum) {
     if (result) {
       const timestamps = result.timestamps || result.timestamp;
       const closes = result.indicators?.quote?.[0]?.close;
-
       if (timestamps && closes && timestamps.length > 0) {
         const idx = closes.findIndex(c => c !== null);
         if (idx >= 0) {
@@ -64,9 +58,14 @@ export async function haalHistorischeKoers(ticker, datum) {
   }
 }
 
-/**
- * Haal huidige koers op
- */
+// Haal jan1 en dec31 apart op met vertraging ertussen
+export async function haalKoersenVoorJaar(ticker, jaar) {
+  const jan1 = await haalHistorischeKoers(ticker, `${jaar}-01-02`);
+  await wacht(1000); // 1 seconde wachten tussen requests
+  const dec31 = await haalHistorischeKoers(ticker, `${jaar}-12-30`);
+  return { jan1, dec31 };
+}
+
 export async function haalKoersOp(ticker) {
   try {
     const period2 = Math.floor(Date.now() / 1000);
@@ -76,15 +75,10 @@ export async function haalKoersOp(ticker) {
     const data = await res.json();
     const meta = data?.chart?.result?.[0]?.meta;
     if (meta) {
-      return {
-        prijs: meta.regularMarketPrice,
-        datum: new Date().toISOString().split('T')[0],
-        currency: meta.currency,
-      };
+      return { prijs: meta.regularMarketPrice, datum: new Date().toISOString().split('T')[0], currency: meta.currency };
     }
     return null;
   } catch (err) {
-    console.error('Koers ophalen mislukt:', err);
     return null;
   }
 }
