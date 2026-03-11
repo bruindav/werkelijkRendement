@@ -1,22 +1,27 @@
-const ALPHA_VANTAGE_KEY = import.meta.env.VITE_ALPHA_VANTAGE_KEY || 'demo';
+// Fix 2 - Yahoo Finance proxy (geen API key, onbeperkt gratis)
+
+const YAHOO_PROXY = 'https://query1.finance.yahoo.com/v8/finance/chart';
+const YAHOO_SEARCH = 'https://query2.finance.yahoo.com/v1/finance/search';
 
 /**
- * Zoek aandeel info op via ticker symbool
+ * Zoek aandeel info op via naam of ticker
  */
 export async function zoekAandeel(query) {
   try {
-    const url = `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(query)}&apikey=${ALPHA_VANTAGE_KEY}`;
+    const url = `${YAHOO_SEARCH}?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0&listsCount=0`;
     const res = await fetch(url);
     const data = await res.json();
 
-    if (data.bestMatches) {
-      return data.bestMatches.map(m => ({
-        symbol: m['1. symbol'],
-        name: m['2. name'],
-        type: m['3. type'],
-        region: m['4. region'],
-        currency: m['8. currency'],
-      }));
+    if (data.quotes) {
+      return data.quotes
+        .filter(q => q.quoteType === 'EQUITY' || q.quoteType === 'ETF' || q.quoteType === 'MUTUALFUND')
+        .map(q => ({
+          symbol: q.symbol,
+          name: q.longname || q.shortname || q.symbol,
+          type: q.quoteType,
+          region: q.exchange,
+          currency: q.currency || 'EUR',
+        }));
     }
     return [];
   } catch (err) {
@@ -30,16 +35,16 @@ export async function zoekAandeel(query) {
  */
 export async function haalKoersOp(ticker) {
   try {
-    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${ALPHA_VANTAGE_KEY}`;
+    const url = `${YAHOO_PROXY}/${ticker}?interval=1d&range=1d`;
     const res = await fetch(url);
     const data = await res.json();
 
-    const quote = data['Global Quote'];
-    if (quote && quote['05. price']) {
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (meta) {
       return {
-        prijs: parseFloat(quote['05. price']),
-        datum: quote['07. latest trading day'],
-        wijziging: parseFloat(quote['10. change percent']),
+        prijs: meta.regularMarketPrice,
+        datum: new Date(meta.regularTradingPeriodEndDate * 1000).toISOString().split('T')[0],
+        currency: meta.currency,
       };
     }
     return null;
@@ -50,32 +55,33 @@ export async function haalKoersOp(ticker) {
 }
 
 /**
- * Haal historische koers op voor specifieke datum
+ * Haal historische koers op voor specifieke datum (YYYY-MM-DD)
  */
 export async function haalHistorischeKoers(ticker, datum) {
   try {
-    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&outputsize=full&apikey=${ALPHA_VANTAGE_KEY}`;
+    // Zet datum om naar Unix timestamps (dag voor en dag na voor zekerheid)
+    const doelDatum = new Date(datum);
+    const van = Math.floor(doelDatum.getTime() / 1000) - 86400;
+    const tot = Math.floor(doelDatum.getTime() / 1000) + 86400 * 5;
+
+    const url = `${YAHOO_PROXY}/${ticker}?interval=1d&period1=${van}&period2=${tot}`;
     const res = await fetch(url);
     const data = await res.json();
 
-    const timeSeries = data['Time Series (Daily)'];
-    if (timeSeries) {
-      // Zoek dichtstbijzijnde handeldag
-      const datums = Object.keys(timeSeries).sort();
-      const doelDatum = datum; // 'YYYY-MM-DD'
+    const result = data?.chart?.result?.[0];
+    if (result) {
+      const timestamps = result.timestamps || result.timestamp;
+      const closes = result.indicators?.quote?.[0]?.close;
 
-      // Vind de datum die het dichtst bij ligt (op of na de gevraagde datum)
-      const gevondenDatum = datums.find(d => d >= doelDatum) || datums[datums.length - 1];
-      const dagData = timeSeries[gevondenDatum];
-
-      if (dagData) {
-        return {
-          datum: gevondenDatum,
-          slotkoers: parseFloat(dagData['4. close']),
-          open: parseFloat(dagData['1. open']),
-          hoog: parseFloat(dagData['2. high']),
-          laag: parseFloat(dagData['3. low']),
-        };
+      if (timestamps && closes && timestamps.length > 0) {
+        // Eerste geldige slotkoers
+        const idx = closes.findIndex(c => c !== null);
+        if (idx >= 0) {
+          return {
+            datum: new Date(timestamps[idx] * 1000).toISOString().split('T')[0],
+            slotkoers: closes[idx],
+          };
+        }
       }
     }
     return null;
