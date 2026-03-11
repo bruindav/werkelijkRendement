@@ -18,6 +18,7 @@ export const HEFFINGSVRIJ_VERMOGEN = {
 /**
  * Bereken werkelijk rendement per positie
  */
+// Fix 9 - Kosten meegenomen in rendement berekening
 export function berekenPositieRendement(positie) {
   const waardeJan1 = positie.jan1_waarde || 0;
   const waardeDec31 = positie.dec31_waarde || 0;
@@ -27,7 +28,8 @@ export function berekenPositieRendement(positie) {
 
   const koersresultaat = waardeDec31 - waardeJan1 + totaalVerkopen - totaalAankopen;
   const inkomen = (positie.dividend || 0) + (positie.rente || 0);
-  const totaalRendement = koersresultaat + inkomen;
+  const kosten = positie.kosten || 0;
+  const totaalRendement = koersresultaat + inkomen - kosten;
   const rendementPct = waardeJan1 > 0 ? (totaalRendement / waardeJan1) * 100 : 0;
 
   return {
@@ -37,6 +39,7 @@ export function berekenPositieRendement(positie) {
     totaalVerkopen,
     koersresultaat,
     inkomen,
+    kosten,
     totaalRendement,
     rendementPct,
   };
