@@ -1,29 +1,83 @@
+// Fix 9 - Rekening naam wijzigen + kosten per rekening
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRekeningen } from '../hooks/useFirestore';
-import { CreditCard, Plus, Trash2, ArrowRight, X, Check, ChevronLeft } from 'lucide-react';
+import { CreditCard, Plus, Trash2, ArrowRight, X, Check, ChevronLeft, Edit3 } from 'lucide-react';
 
-function RekeningForm({ onSave, onCancel }) {
-  const [naam, setNaam] = useState('');
+function RekeningForm({ onSave, onCancel, initial = {} }) {
+  const [naam, setNaam] = useState(initial.naam || '');
+  const [kosten, setKosten] = useState(initial.kosten || '');
+  return (
+    <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-3">
+      <div className="flex gap-3 items-center">
+        <input autoFocus value={naam} onChange={e => setNaam(e.target.value)}
+          placeholder="Naam rekening (bijv. Beleggingsrekening...)"
+          className="flex-1 bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onKeyDown={e => e.key === 'Enter' && naam && onSave({ naam, kosten: parseFloat(kosten) || 0 })} />
+        <button onClick={() => naam && onSave({ naam, kosten: parseFloat(kosten) || 0 })} disabled={!naam}
+          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-lg px-3 py-2">
+          <Check className="w-4 h-4" />
+        </button>
+        <button onClick={onCancel} className="text-slate-400 hover:text-white rounded-lg px-3 py-2">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <label className="block text-xs text-slate-400 mb-1">Kosten rekening (€) <span className="text-slate-500">— aftrekbaar van rendement</span></label>
+          <input type="number" step="0.01" value={kosten} onChange={e => setKosten(e.target.value)}
+            placeholder="bijv. 25.00 (beheerskosten, abonnement...)"
+            className="w-full bg-slate-800 border border-red-900/40 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder }) {
+  const [bewerken, setBewerken] = useState(false);
+
+  if (bewerken) {
+    return (
+      <div className="mb-1">
+        <RekeningForm
+          initial={rek}
+          onSave={async (data) => { await onUpdate(rek.id, data); setBewerken(false); }}
+          onCancel={() => setBewerken(false)}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 flex gap-3 items-center">
-      <input
-        autoFocus
-        value={naam}
-        onChange={e => setNaam(e.target.value)}
-        placeholder="Naam rekening (bijv. Beleggingsrekening, Spaarrekening...)"
-        className="flex-1 bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        onKeyDown={e => e.key === 'Enter' && naam && onSave({ naam })}
-      />
-      <button onClick={() => naam && onSave({ naam })} disabled={!naam}
-        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-lg px-3 py-2">
-        <Check className="w-4 h-4" />
-      </button>
-      <button onClick={onCancel} className="text-slate-400 hover:text-white rounded-lg px-3 py-2">
-        <X className="w-4 h-4" />
-      </button>
+    <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-5 flex items-center justify-between group">
+      <Link to={`/jaar/${year}/bank/${bankId}/rekening/${rek.id}`} className="flex items-center gap-4 flex-1">
+        <div className="w-11 h-11 bg-purple-600/20 border border-purple-600/30 rounded-xl flex items-center justify-center">
+          <CreditCard className="w-5 h-5 text-purple-400" />
+        </div>
+        <div>
+          <p className="font-semibold text-white">{rek.naam}</p>
+          <p className="text-sm text-slate-500">
+            Klik om posities te bekijken
+            {rek.kosten > 0 && <span className="ml-2 text-red-400">· Kosten: -{new Intl.NumberFormat('nl-NL', {style:'currency',currency:'EUR'}).format(rek.kosten)}</span>}
+          </p>
+        </div>
+      </Link>
+      <div className="flex items-center gap-1">
+        <Link to={`/jaar/${year}/bank/${bankId}/rekening/${rek.id}`}
+          className="flex items-center gap-2 text-slate-400 hover:text-white text-sm mr-2">
+          Beheer <ArrowRight className="w-4 h-4" />
+        </Link>
+        <button onClick={() => setBewerken(true)}
+          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-blue-400 transition-all p-2" title="Naam wijzigen">
+          <Edit3 className="w-4 h-4" />
+        </button>
+        <button onClick={() => onVerwijder(rek)}
+          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-2" title="Verwijderen">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -31,12 +85,13 @@ function RekeningForm({ onSave, onCancel }) {
 export default function BankDetail() {
   const { year, bankId } = useParams();
   const { user } = useApp();
-  const { rekeningen, loading, voegRekeningToe, verwijderRekening } = useRekeningen(user?.uid, year, bankId);
+  const { rekeningen, loading, voegRekeningToe, updateRekening, verwijderRekening } = useRekeningen(user?.uid, year, bankId);
   const [toonForm, setToonForm] = useState(false);
 
-  const handleSave = async (data) => {
-    await voegRekeningToe(data);
-    setToonForm(false);
+  const handleVerwijder = async (rek) => {
+    if (window.confirm(`Rekening "${rek.naam}" verwijderen? Alle posities worden ook verwijderd.`)) {
+      await verwijderRekening(rek.id);
+    }
   };
 
   return (
@@ -51,17 +106,15 @@ export default function BankDetail() {
           <h1 className="text-2xl font-bold text-white">Rekeningen</h1>
           <p className="text-slate-400 mt-1">Belastingjaar {year}</p>
         </div>
-        <button
-          onClick={() => setToonForm(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium"
-        >
+        <button onClick={() => setToonForm(true)}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium">
           <Plus className="w-4 h-4" /> Rekening toevoegen
         </button>
       </div>
 
       {toonForm && (
         <div className="mb-4">
-          <RekeningForm onSave={handleSave} onCancel={() => setToonForm(false)} />
+          <RekeningForm onSave={async (data) => { await voegRekeningToe(data); setToonForm(false); }} onCancel={() => setToonForm(false)} />
         </div>
       )}
 
@@ -78,28 +131,7 @@ export default function BankDetail() {
       ) : (
         <div className="space-y-3">
           {rekeningen.map(rek => (
-            <div key={rek.id} className="bg-slate-800/40 border border-slate-700 rounded-2xl p-5 flex items-center justify-between group">
-              <Link to={`/jaar/${year}/bank/${bankId}/rekening/${rek.id}`} className="flex items-center gap-4 flex-1">
-                <div className="w-11 h-11 bg-purple-600/20 border border-purple-600/30 rounded-xl flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-white">{rek.naam}</p>
-                  <p className="text-sm text-slate-500">Klik om posities te bekijken</p>
-                </div>
-              </Link>
-              <div className="flex items-center gap-2">
-                <Link to={`/jaar/${year}/bank/${bankId}/rekening/${rek.id}`} className="flex items-center gap-2 text-slate-400 hover:text-white text-sm mr-2">
-                  Beheer <ArrowRight className="w-4 h-4" />
-                </Link>
-                <button
-                  onClick={() => window.confirm(`Rekening "${rek.naam}" verwijderen?`) && verwijderRekening(rek.id)}
-                  className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+            <RekeningRij key={rek.id} rek={rek} year={year} bankId={bankId} onUpdate={updateRekening} onVerwijder={handleVerwijder} />
           ))}
         </div>
       )}

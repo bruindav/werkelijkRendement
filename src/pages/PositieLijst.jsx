@@ -1,3 +1,4 @@
+// Fix 9 - Auto aantal berekenen + kosten per positie
 // Fix 7 - Dec31 koers fix + transacties bewerkbaar
 // Fix 3 - Ticker uitleg notatie per land
 // Fix 3 - Ticker info note toegevoegd
@@ -74,6 +75,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     dec31_waarde: initial?.dec31_waarde || '',
     dividend: initial?.dividend || '',
     rente: initial?.rente || '',
+    kosten: initial?.kosten || '',
   });
   const [loadingKoers, setLoadingKoers] = useState(false);
 
@@ -83,6 +85,20 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     const aantal = parseFloat(form[`${prefix}_aantal`]);
     const prijs = parseFloat(form[`${prefix}_prijs`]);
     if (!isNaN(aantal) && !isNaN(prijs)) {
+      set(`${prefix}_waarde`, (aantal * prijs).toFixed(2));
+    }
+  };
+
+  const berekenAantal = (prefix) => {
+    const waarde = parseFloat(form[`${prefix}_waarde`]);
+    const prijs = parseFloat(form[`${prefix}_prijs`]);
+    const aantal = parseFloat(form[`${prefix}_aantal`]);
+    // Bereken aantal als waarde en prijs bekend zijn maar aantal leeg/0
+    if (!isNaN(waarde) && !isNaN(prijs) && prijs > 0 && (isNaN(aantal) || aantal === 0)) {
+      set(`${prefix}_aantal`, (waarde / prijs).toFixed(4));
+    }
+    // Bereken waarde als aantal en prijs bekend zijn maar waarde leeg/0
+    if (!isNaN(aantal) && !isNaN(prijs) && prijs > 0 && (isNaN(waarde) || waarde === 0)) {
       set(`${prefix}_waarde`, (aantal * prijs).toFixed(2));
     }
   };
@@ -109,13 +125,18 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     set('ticker', r.symbol);
   };
 
-  const numField = (label, key, prefix) => (
+  const numField = (label, key, prefix, isWaarde = false) => (
     <div>
       <label className="block text-xs text-slate-400 mb-1">{label}</label>
       <input
         type="number" step="0.01" value={form[key]}
         onChange={e => set(key, e.target.value)}
-        onBlur={() => prefix && berekenWaarde(prefix)}
+        onBlur={() => {
+          if (prefix) {
+            if (isWaarde) berekenAantal(prefix);
+            else berekenWaarde(prefix);
+          }
+        }}
         className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
@@ -133,6 +154,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
       dec31_waarde: parseFloat(form.dec31_waarde) || 0,
       dividend: parseFloat(form.dividend) || 0,
       rente: parseFloat(form.rente) || 0,
+      kosten: parseFloat(form.kosten) || 0,
     });
   };
 
@@ -204,7 +226,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         <div className="grid grid-cols-3 gap-3">
           {numField('Aantal', 'jan1_aantal', 'jan1')}
           {numField('Prijs (€)', 'jan1_prijs', 'jan1')}
-          {numField('Waarde (€)', 'jan1_waarde', null)}
+          {numField('Waarde (€)', 'jan1_waarde', 'jan1', true)}
         </div>
       </div>
 
@@ -213,15 +235,23 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         <div className="grid grid-cols-3 gap-3">
           {numField('Aantal', 'dec31_aantal', 'dec31')}
           {numField('Prijs (€)', 'dec31_prijs', 'dec31')}
-          {numField('Waarde (€)', 'dec31_waarde', null)}
+          {numField('Waarde (€)', 'dec31_waarde', 'dec31', true)}
         </div>
       </div>
 
       <div>
-        <p className="text-sm font-medium text-slate-300 mb-3">💰 Inkomen in {year}</p>
-        <div className="grid grid-cols-2 gap-3">
+        <p className="text-sm font-medium text-slate-300 mb-3">💰 Inkomen & Kosten in {year}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {numField('Dividend ontvangen (€)', 'dividend', null)}
           {numField('Rente ontvangen (€)', 'rente', null)}
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Kosten (€) <span className="text-slate-500">aftrekbaar</span></label>
+            <input type="number" step="0.01" value={form.kosten}
+              onChange={e => set('kosten', e.target.value)}
+              placeholder="0.00"
+              className="w-full bg-slate-700 border border-red-900/40 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+            <p className="text-xs text-slate-500 mt-1">Transactie- of beheerskosten</p>
+          </div>
         </div>
       </div>
 
@@ -436,6 +466,10 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
               <p className="text-sm font-medium text-white mt-0.5">{formatEuro(positie.rente)}</p>
             </div>
             <div className="bg-slate-900/50 rounded-xl p-3">
+              <p className="text-xs text-slate-500">Kosten (aftrekbaar)</p>
+              <p className="text-sm font-medium text-red-400 mt-0.5">-{formatEuro(r.kosten)}</p>
+            </div>
+            <div className="bg-slate-900/50 rounded-xl p-3 col-span-2 sm:col-span-1">
               <p className="text-xs text-slate-500">Totaal rendement</p>
               <p className={`text-sm font-bold mt-0.5 ${pos ? 'text-emerald-400' : 'text-red-400'}`}>{formatEuro(r.totaalRendement)}</p>
             </div>
