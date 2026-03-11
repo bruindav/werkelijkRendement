@@ -1,10 +1,11 @@
+// Fix 1 - Bewerken knop + jaar zichtbaar
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { usePosities } from '../hooks/useFirestore';
 import { berekenPositieRendement, formatEuro, formatPct } from '../services/berekening';
-import { zoekAandeel, haalKoersOp, haalHistorischeKoers } from '../services/koersApi';
-import { Plus, Trash2, ChevronLeft, ChevronDown, ChevronUp, Search, TrendingUp, TrendingDown, Edit3, Check, X, Loader } from 'lucide-react';
+import { zoekAandeel, haalHistorischeKoers } from '../services/koersApi';
+import { Plus, Trash2, ChevronDown, ChevronUp, Search, TrendingUp, Edit3, Check, X, Loader, Calendar } from 'lucide-react';
 
 const TYPES = ['aandeel', 'obligatie', 'etf', 'anders'];
 
@@ -56,18 +57,25 @@ function KoersZoeker({ onSelect }) {
   );
 }
 
-function PositieForm({ onSave, onCancel, year }) {
+function PositieForm({ onSave, onCancel, year, initial = null }) {
   const [form, setForm] = useState({
-    naam: '', type: 'aandeel', ticker: '', isin: '',
-    jan1_aantal: '', jan1_prijs: '', jan1_waarde: '',
-    dec31_aantal: '', dec31_prijs: '', dec31_waarde: '',
-    dividend: '', rente: '',
+    naam: initial?.naam || '',
+    type: initial?.type || 'aandeel',
+    ticker: initial?.ticker || '',
+    isin: initial?.isin || '',
+    jan1_aantal: initial?.jan1_aantal || '',
+    jan1_prijs: initial?.jan1_prijs || '',
+    jan1_waarde: initial?.jan1_waarde || '',
+    dec31_aantal: initial?.dec31_aantal || '',
+    dec31_prijs: initial?.dec31_prijs || '',
+    dec31_waarde: initial?.dec31_waarde || '',
+    dividend: initial?.dividend || '',
+    rente: initial?.rente || '',
   });
   const [loadingKoers, setLoadingKoers] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  // Auto bereken waarde
   const berekenWaarde = (prefix) => {
     const aantal = parseFloat(form[`${prefix}_aantal`]);
     const prijs = parseFloat(form[`${prefix}_prijs`]);
@@ -80,11 +88,9 @@ function PositieForm({ onSave, onCancel, year }) {
     if (!form.ticker) return;
     setLoadingKoers(true);
     try {
-      const jan1Datum = `${year}-01-02`; // Eerste handelsdag
-      const dec31Datum = `${year}-12-31`;
       const [jan1, dec31] = await Promise.all([
-        haalHistorischeKoers(form.ticker, jan1Datum),
-        haalHistorischeKoers(form.ticker, dec31Datum),
+        haalHistorischeKoers(form.ticker, `${year}-01-02`),
+        haalHistorischeKoers(form.ticker, `${year}-12-31`),
       ]);
       if (jan1) {
         set('jan1_prijs', jan1.slotkoers.toString());
@@ -107,9 +113,7 @@ function PositieForm({ onSave, onCancel, year }) {
     <div>
       <label className="block text-xs text-slate-400 mb-1">{label}</label>
       <input
-        type="number"
-        step="0.01"
-        value={form[key]}
+        type="number" step="0.01" value={form[key]}
         onChange={e => set(key, e.target.value)}
         onBlur={() => prefix && berekenWaarde(prefix)}
         className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -129,21 +133,25 @@ function PositieForm({ onSave, onCancel, year }) {
       dec31_waarde: parseFloat(form.dec31_waarde) || 0,
       dividend: parseFloat(form.dividend) || 0,
       rente: parseFloat(form.rente) || 0,
-      aankopen: [], verkopen: [],
     });
   };
 
   return (
     <div className="bg-slate-900 border border-blue-600/30 rounded-2xl p-6 space-y-5">
-      <h3 className="font-semibold text-white">Nieuwe positie toevoegen</h3>
-
-      {/* Zoeker */}
-      <div>
-        <label className="block text-xs text-slate-400 mb-2">Zoek via ticker / naam (optioneel)</label>
-        <KoersZoeker onSelect={handleSelectAandeel} />
+      <div className="flex items-center gap-2 bg-blue-600/20 border border-blue-600/30 rounded-xl px-4 py-2.5">
+        <Calendar className="w-4 h-4 text-blue-400" />
+        <span className="text-blue-300 text-sm font-medium">
+          {initial ? 'Positie bewerken' : 'Nieuwe positie toevoegen'} — belastingjaar <strong>{year}</strong>
+        </span>
       </div>
 
-      {/* Basis info */}
+      {!initial && (
+        <div>
+          <label className="block text-xs text-slate-400 mb-2">Zoek via ticker / naam (optioneel)</label>
+          <KoersZoeker onSelect={handleSelectAandeel} />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="sm:col-span-2">
           <label className="block text-xs text-slate-400 mb-1">Naam *</label>
@@ -175,7 +183,6 @@ function PositieForm({ onSave, onCancel, year }) {
         </div>
       </div>
 
-      {/* Koersen ophalen */}
       {form.ticker && (
         <button onClick={haalKoersen} disabled={loadingKoers}
           className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 disabled:opacity-50">
@@ -184,9 +191,8 @@ function PositieForm({ onSave, onCancel, year }) {
         </button>
       )}
 
-      {/* 1 januari */}
       <div>
-        <p className="text-sm font-medium text-slate-300 mb-3">Waarden per 1 januari {year}</p>
+        <p className="text-sm font-medium text-slate-300 mb-3">📅 Waarden per 1 januari {year}</p>
         <div className="grid grid-cols-3 gap-3">
           {numField('Aantal', 'jan1_aantal', 'jan1')}
           {numField('Prijs (€)', 'jan1_prijs', 'jan1')}
@@ -194,9 +200,8 @@ function PositieForm({ onSave, onCancel, year }) {
         </div>
       </div>
 
-      {/* 31 december */}
       <div>
-        <p className="text-sm font-medium text-slate-300 mb-3">Waarden per 31 december {year}</p>
+        <p className="text-sm font-medium text-slate-300 mb-3">📅 Waarden per 31 december {year}</p>
         <div className="grid grid-cols-3 gap-3">
           {numField('Aantal', 'dec31_aantal', 'dec31')}
           {numField('Prijs (€)', 'dec31_prijs', 'dec31')}
@@ -204,9 +209,8 @@ function PositieForm({ onSave, onCancel, year }) {
         </div>
       </div>
 
-      {/* Inkomen */}
       <div>
-        <p className="text-sm font-medium text-slate-300 mb-3">Inkomen</p>
+        <p className="text-sm font-medium text-slate-300 mb-3">💰 Inkomen in {year}</p>
         <div className="grid grid-cols-2 gap-3">
           {numField('Dividend ontvangen (€)', 'dividend', null)}
           {numField('Rente ontvangen (€)', 'rente', null)}
@@ -216,7 +220,7 @@ function PositieForm({ onSave, onCancel, year }) {
       <div className="flex gap-3 pt-2">
         <button onClick={handleSave} disabled={!form.naam}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl px-5 py-2.5 text-sm font-medium">
-          <Check className="w-4 h-4" /> Opslaan
+          <Check className="w-4 h-4" /> {initial ? 'Wijzigingen opslaan' : 'Toevoegen'}
         </button>
         <button onClick={onCancel} className="text-slate-400 hover:text-white text-sm px-4 py-2.5">
           Annuleren
@@ -230,7 +234,6 @@ function TransactieForm({ type, onSave, onCancel }) {
   const [datum, setDatum] = useState('');
   const [aantal, setAantal] = useState('');
   const [prijs, setPrijs] = useState('');
-
   const totaal = parseFloat(aantal) * parseFloat(prijs) || 0;
 
   return (
@@ -254,9 +257,7 @@ function TransactieForm({ type, onSave, onCancel }) {
         </div>
         <div>
           <label className="text-xs text-slate-400 block mb-1">Totaal (€)</label>
-          <div className="bg-slate-700/50 border border-slate-700 text-slate-300 rounded-lg px-2 py-1.5 text-sm">
-            {totaal.toFixed(2)}
-          </div>
+          <div className="bg-slate-700/50 border border-slate-700 text-slate-300 rounded-lg px-2 py-1.5 text-sm">{totaal.toFixed(2)}</div>
         </div>
       </div>
       <div className="flex gap-2 mt-3">
@@ -271,8 +272,9 @@ function TransactieForm({ type, onSave, onCancel }) {
   );
 }
 
-function PositieKaart({ positie, onUpdate, onVerwijder }) {
+function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
   const [open, setOpen] = useState(false);
+  const [bewerken, setBewerken] = useState(false);
   const [toonAankoop, setToonAankoop] = useState(false);
   const [toonVerkoop, setToonVerkoop] = useState(false);
 
@@ -291,9 +293,24 @@ function PositieKaart({ positie, onUpdate, onVerwijder }) {
     await onUpdate(positie.id, { [type]: huidig });
   };
 
+  const handleBewerkenOpslaan = async (data) => {
+    await onUpdate(positie.id, data);
+    setBewerken(false);
+  };
+
+  if (bewerken) {
+    return (
+      <PositieForm
+        year={year}
+        initial={positie}
+        onSave={handleBewerkenOpslaan}
+        onCancel={() => setBewerken(false)}
+      />
+    );
+  }
+
   return (
     <div className="bg-slate-800/40 border border-slate-700 rounded-2xl overflow-hidden">
-      {/* Header */}
       <div className="p-4 flex items-center gap-3 cursor-pointer" onClick={() => setOpen(!open)}>
         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${pos ? 'bg-emerald-400' : 'bg-red-400'}`} />
         <div className="flex-1 min-w-0">
@@ -302,33 +319,37 @@ function PositieKaart({ positie, onUpdate, onVerwijder }) {
             <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">{positie.type}</span>
             {positie.ticker && <span className="text-xs text-blue-400 font-mono">{positie.ticker}</span>}
           </div>
-          <div className="flex items-center gap-4 mt-1 text-sm">
-            <span className="text-slate-400">Waarde 1/1: {formatEuro(r.waardeJan1)}</span>
-            <span className="text-slate-400">31/12: {formatEuro(r.waardeDec31)}</span>
+          <div className="flex items-center gap-4 mt-1 text-sm flex-wrap">
+            <span className="text-slate-400">1/1/{year}: {formatEuro(r.waardeJan1)}</span>
+            <span className="text-slate-400">31/12/{year}: {formatEuro(r.waardeDec31)}</span>
             <span className={`font-medium ${pos ? 'text-emerald-400' : 'text-red-400'}`}>
               {pos ? '+' : ''}{formatEuro(r.totaalRendement)} ({formatPct(r.rendementPct)})
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); onVerwijder(positie.id); }}
-            className="text-slate-600 hover:text-red-400 p-1.5 transition-colors">
+        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+          <button onClick={() => setBewerken(true)}
+            className="text-slate-500 hover:text-blue-400 p-1.5 transition-colors" title="Bewerken">
+            <Edit3 className="w-4 h-4" />
+          </button>
+          <button onClick={() => onVerwijder(positie.id)}
+            className="text-slate-500 hover:text-red-400 p-1.5 transition-colors" title="Verwijderen">
             <Trash2 className="w-4 h-4" />
           </button>
-          {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+          <div className="pl-1">
+            {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+          </div>
         </div>
       </div>
 
-      {/* Detail */}
       {open && (
         <div className="border-t border-slate-700 p-4 space-y-4">
-          {/* Koers detail */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: '1 jan - Aantal', val: positie.jan1_aantal },
-              { label: '1 jan - Prijs', val: formatEuro(positie.jan1_prijs) },
-              { label: '31 dec - Aantal', val: positie.dec31_aantal },
-              { label: '31 dec - Prijs', val: formatEuro(positie.dec31_prijs) },
+              { label: `1 jan ${year} - Aantal`, val: positie.jan1_aantal },
+              { label: `1 jan ${year} - Prijs`, val: formatEuro(positie.jan1_prijs) },
+              { label: `31 dec ${year} - Aantal`, val: positie.dec31_aantal },
+              { label: `31 dec ${year} - Prijs`, val: formatEuro(positie.dec31_prijs) },
             ].map(({ label, val }) => (
               <div key={label} className="bg-slate-900/50 rounded-xl p-3">
                 <p className="text-xs text-slate-500">{label}</p>
@@ -337,7 +358,6 @@ function PositieKaart({ positie, onUpdate, onVerwijder }) {
             ))}
           </div>
 
-          {/* Rendement detail */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-slate-900/50 rounded-xl p-3">
               <p className="text-xs text-slate-500">Koersresultaat</p>
@@ -357,7 +377,6 @@ function PositieKaart({ positie, onUpdate, onVerwijder }) {
             </div>
           </div>
 
-          {/* Aankopen */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium text-slate-300">Aankopen ({positie.aankopen?.length || 0})</p>
@@ -380,7 +399,6 @@ function PositieKaart({ positie, onUpdate, onVerwijder }) {
             )}
           </div>
 
-          {/* Verkopen */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium text-slate-300">Verkopen ({positie.verkopen?.length || 0})</p>
@@ -429,11 +447,18 @@ export default function PositieLijst() {
         <span className="text-slate-300">Posities</span>
       </div>
 
+      <div className="flex items-center gap-2 bg-blue-950/60 border border-blue-800/40 rounded-xl px-4 py-2.5 mb-4">
+        <Calendar className="w-4 h-4 text-blue-400" />
+        <span className="text-blue-300 text-sm">
+          Je bekijkt en bewerkt gegevens voor belastingjaar <strong className="text-white">{year}</strong>
+        </span>
+      </div>
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Posities</h1>
           <p className="text-slate-400 mt-1">
-            {posities.length} posities · Vermogen 1/1: {formatEuro(totaal.vermogen)} ·
+            {posities.length} posities · Vermogen 1/1/{year}: {formatEuro(totaal.vermogen)} ·
             <span className={`ml-1 ${totaal.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               Rendement: {formatEuro(totaal.rendement)}
             </span>
@@ -447,7 +472,11 @@ export default function PositieLijst() {
 
       {toonForm && (
         <div className="mb-4">
-          <PositieForm year={year} onSave={async (data) => { await voegPositieToe(data); setToonForm(false); }} onCancel={() => setToonForm(false)} />
+          <PositieForm
+            year={year}
+            onSave={async (data) => { await voegPositieToe(data); setToonForm(false); }}
+            onCancel={() => setToonForm(false)}
+          />
         </div>
       )}
 
@@ -456,7 +485,8 @@ export default function PositieLijst() {
       ) : posities.length === 0 && !toonForm ? (
         <div className="text-center py-16 bg-slate-800/30 border border-slate-700 rounded-2xl">
           <TrendingUp className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-medium">Nog geen posities</p>
+          <p className="text-slate-400 font-medium">Nog geen posities voor {year}</p>
+          <p className="text-slate-500 text-sm mt-1">Voeg een positie toe of kopieer vanuit een vorig jaar via het dashboard</p>
           <button onClick={() => setToonForm(true)} className="mt-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-6 py-2.5 text-sm font-medium">
             <Plus className="w-4 h-4 inline mr-2" />Positie toevoegen
           </button>
@@ -467,6 +497,7 @@ export default function PositieLijst() {
             <PositieKaart
               key={p.id}
               positie={p}
+              year={year}
               onUpdate={updatePositie}
               onVerwijder={(id) => window.confirm('Positie verwijderen?') && verwijderPositie(id)}
             />
