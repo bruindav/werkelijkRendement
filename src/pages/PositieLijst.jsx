@@ -528,7 +528,7 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
 
 export default function PositieLijst() {
   const { year, bankId, accountId } = useParams();
-  const { user } = useApp();
+  const { user, setIsEditing } = useApp();
   const { posities, loading, voegPositieToe, updatePositie, verwijderPositie } = usePosities(user?.uid, year, bankId, accountId);
   const [toonForm, setToonForm] = useState(false);
 
