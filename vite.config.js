@@ -13,4 +13,4 @@ export default defineConfig({
     }
   }
 })
-Commit dat, wacht op de deployment, en probeer dan opnieuw. De nieuwe bestandsnamen forceren de browser om de nieuwe versie te laden.
+Commit;
