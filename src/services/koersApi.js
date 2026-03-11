@@ -1,32 +1,27 @@
-// Fix 4 - CORS proxy voor Yahoo Finance
+// Fix 5 - Financial Modeling Prep API (gratis, geen CORS)
+// Gratis API key aanvragen op: https://financialmodelingprep.com/register
+// 250 calls per dag gratis
 
-const PROXY = 'https://api.allorigins.win/raw?url=';
-const YAHOO_CHART = 'https://query1.finance.yahoo.com/v8/finance/chart';
-const YAHOO_SEARCH = 'https://query2.finance.yahoo.com/v1/finance/search';
-
-function proxyUrl(url) {
-  return `${PROXY}${encodeURIComponent(url)}`;
-}
+const FMP_BASE = 'https://financialmodelingprep.com/api/v3';
+const FMP_KEY = import.meta.env.VITE_FMP_KEY || 'demo';
 
 /**
- * Zoek aandeel info op via naam of ticker
+ * Zoek aandeel op naam of ticker
  */
 export async function zoekAandeel(query) {
   try {
-    const url = `${YAHOO_SEARCH}?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0&listsCount=0`;
-    const res = await fetch(proxyUrl(url));
+    const url = `${FMP_BASE}/search?query=${encodeURIComponent(query)}&limit=8&apikey=${FMP_KEY}`;
+    const res = await fetch(url);
     const data = await res.json();
 
-    if (data.quotes) {
-      return data.quotes
-        .filter(q => ['EQUITY', 'ETF', 'MUTUALFUND'].includes(q.quoteType))
-        .map(q => ({
-          symbol: q.symbol,
-          name: q.longname || q.shortname || q.symbol,
-          type: q.quoteType,
-          region: q.exchange,
-          currency: q.currency || 'EUR',
-        }));
+    if (Array.isArray(data)) {
+      return data.map(q => ({
+        symbol: q.symbol,
+        name: q.name,
+        type: q.stockExchange,
+        region: q.exchangeShortName,
+        currency: q.currency || 'EUR',
+      }));
     }
     return [];
   } catch (err) {
@@ -40,15 +35,13 @@ export async function zoekAandeel(query) {
  */
 export async function haalKoersOp(ticker) {
   try {
-    const url = `${YAHOO_CHART}/${ticker}?interval=1d&range=1d`;
-    const res = await fetch(proxyUrl(url));
+    const url = `${FMP_BASE}/quote-short/${ticker}?apikey=${FMP_KEY}`;
+    const res = await fetch(url);
     const data = await res.json();
-    const meta = data?.chart?.result?.[0]?.meta;
-    if (meta) {
+    if (Array.isArray(data) && data[0]) {
       return {
-        prijs: meta.regularMarketPrice,
-        datum: new Date(meta.regularTradingPeriodEndDate * 1000).toISOString().split('T')[0],
-        currency: meta.currency,
+        prijs: data[0].price,
+        datum: new Date().toISOString().split('T')[0],
       };
     }
     return null;
@@ -63,28 +56,29 @@ export async function haalKoersOp(ticker) {
  */
 export async function haalHistorischeKoers(ticker, datum) {
   try {
+    // Haal koersen op rondom de gevraagde datum
     const doelDatum = new Date(datum);
-    const van = Math.floor(doelDatum.getTime() / 1000) - 86400;
-    const tot = Math.floor(doelDatum.getTime() / 1000) + 86400 * 5;
+    const vanDatum = new Date(doelDatum);
+    vanDatum.setDate(vanDatum.getDate() - 5);
+    const totDatum = new Date(doelDatum);
+    totDatum.setDate(totDatum.getDate() + 5);
 
-    const url = `${YAHOO_CHART}/${ticker}?interval=1d&period1=${van}&period2=${tot}`;
-    const res = await fetch(proxyUrl(url));
+    const van = vanDatum.toISOString().split('T')[0];
+    const tot = totDatum.toISOString().split('T')[0];
+
+    const url = `${FMP_BASE}/historical-price-full/${ticker}?from=${van}&to=${tot}&apikey=${FMP_KEY}`;
+    const res = await fetch(url);
     const data = await res.json();
 
-    const result = data?.chart?.result?.[0];
-    if (result) {
-      const timestamps = result.timestamps || result.timestamp;
-      const closes = result.indicators?.quote?.[0]?.close;
-
-      if (timestamps && closes && timestamps.length > 0) {
-        const idx = closes.findIndex(c => c !== null);
-        if (idx >= 0) {
-          return {
-            datum: new Date(timestamps[idx] * 1000).toISOString().split('T')[0],
-            slotkoers: closes[idx],
-          };
-        }
-      }
+    if (data.historical && data.historical.length > 0) {
+      // Sorteer op datum en pak dichtstbijzijnde
+      const gesorteerd = data.historical.sort((a, b) => 
+        Math.abs(new Date(a.date) - doelDatum) - Math.abs(new Date(b.date) - doelDatum)
+      );
+      return {
+        datum: gesorteerd[0].date,
+        slotkoers: gesorteerd[0].close,
+      };
     }
     return null;
   } catch (err) {
