@@ -1,3 +1,4 @@
+// Fix 10 - Jaar switchen navigeert mee
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -6,7 +7,7 @@ import { LayoutDashboard, Building2, FileText, Settings, LogOut, ChevronDown, Me
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
 
 export default function Layout({ children }) {
-  const { user, logout, selectedYear, setSelectedYear } = useApp();
+  const { user, logout, selectedYear, setSelectedYear, isEditing } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -14,6 +15,31 @@ export default function Layout({ children }) {
   const handleLogout = async () => {
     await logout();
     navigate('/');
+  };
+
+  const handleYearChange = (newYear) => {
+    if (isEditing) {
+      alert('Sla eerst je wijzigingen op voordat je van jaar wisselt.');
+      return;
+    }
+    setSelectedYear(Number(newYear));
+    // Als we op een jaar-specifieke pagina zitten, switch naar hetzelfde pad maar nieuw jaar
+    const path = location.pathname;
+    const jaarMatch = path.match(/^\/jaar\/(\d{4})(.*)/);
+    if (jaarMatch) {
+      const rest = jaarMatch[2];
+      // Extraheer alleen bank en rekening, niet dieper (posities mogen wisselen)
+      const parts = rest.split('/').filter(Boolean); // ['bank', bankId, 'rekening', rekId]
+      if (parts.length >= 2) {
+        // We zitten op bank of rekening niveau — navigeer naar jaar/bank lijst
+        navigate(`/jaar/${newYear}`);
+      } else {
+        navigate(`/jaar/${newYear}`);
+      }
+    } else if (path.startsWith('/aangifte/')) {
+      navigate(`/aangifte/${newYear}`);
+    }
+    // dashboard en andere pagina's: geen navigatie nodig
   };
 
   const navItems = [
@@ -46,7 +72,7 @@ export default function Layout({ children }) {
           <div className="relative">
             <select
               value={selectedYear}
-              onChange={e => setSelectedYear(Number(e.target.value))}
+              onChange={e => handleYearChange(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
@@ -114,7 +140,7 @@ export default function Layout({ children }) {
             <label className="text-xs text-slate-500 uppercase tracking-wider font-medium block mb-2">Belastingjaar</label>
             <select
               value={selectedYear}
-              onChange={e => { setSelectedYear(Number(e.target.value)); setMobileOpen(false); }}
+              onChange={e => { handleYearChange(e.target.value); setMobileOpen(false); }}
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2"
             >
               {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
