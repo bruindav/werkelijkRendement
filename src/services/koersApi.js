@@ -1,7 +1,12 @@
-// Fix 2 - Yahoo Finance proxy (geen API key, onbeperkt gratis)
+// Fix 4 - CORS proxy voor Yahoo Finance
 
-const YAHOO_PROXY = 'https://query1.finance.yahoo.com/v8/finance/chart';
+const PROXY = 'https://api.allorigins.win/raw?url=';
+const YAHOO_CHART = 'https://query1.finance.yahoo.com/v8/finance/chart';
 const YAHOO_SEARCH = 'https://query2.finance.yahoo.com/v1/finance/search';
+
+function proxyUrl(url) {
+  return `${PROXY}${encodeURIComponent(url)}`;
+}
 
 /**
  * Zoek aandeel info op via naam of ticker
@@ -9,12 +14,12 @@ const YAHOO_SEARCH = 'https://query2.finance.yahoo.com/v1/finance/search';
 export async function zoekAandeel(query) {
   try {
     const url = `${YAHOO_SEARCH}?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0&listsCount=0`;
-    const res = await fetch(url);
+    const res = await fetch(proxyUrl(url));
     const data = await res.json();
 
     if (data.quotes) {
       return data.quotes
-        .filter(q => q.quoteType === 'EQUITY' || q.quoteType === 'ETF' || q.quoteType === 'MUTUALFUND')
+        .filter(q => ['EQUITY', 'ETF', 'MUTUALFUND'].includes(q.quoteType))
         .map(q => ({
           symbol: q.symbol,
           name: q.longname || q.shortname || q.symbol,
@@ -35,10 +40,9 @@ export async function zoekAandeel(query) {
  */
 export async function haalKoersOp(ticker) {
   try {
-    const url = `${YAHOO_PROXY}/${ticker}?interval=1d&range=1d`;
-    const res = await fetch(url);
+    const url = `${YAHOO_CHART}/${ticker}?interval=1d&range=1d`;
+    const res = await fetch(proxyUrl(url));
     const data = await res.json();
-
     const meta = data?.chart?.result?.[0]?.meta;
     if (meta) {
       return {
@@ -59,13 +63,12 @@ export async function haalKoersOp(ticker) {
  */
 export async function haalHistorischeKoers(ticker, datum) {
   try {
-    // Zet datum om naar Unix timestamps (dag voor en dag na voor zekerheid)
     const doelDatum = new Date(datum);
     const van = Math.floor(doelDatum.getTime() / 1000) - 86400;
     const tot = Math.floor(doelDatum.getTime() / 1000) + 86400 * 5;
 
-    const url = `${YAHOO_PROXY}/${ticker}?interval=1d&period1=${van}&period2=${tot}`;
-    const res = await fetch(url);
+    const url = `${YAHOO_CHART}/${ticker}?interval=1d&period1=${van}&period2=${tot}`;
+    const res = await fetch(proxyUrl(url));
     const data = await res.json();
 
     const result = data?.chart?.result?.[0];
@@ -74,7 +77,6 @@ export async function haalHistorischeKoers(ticker, datum) {
       const closes = result.indicators?.quote?.[0]?.close;
 
       if (timestamps && closes && timestamps.length > 0) {
-        // Eerste geldige slotkoers
         const idx = closes.findIndex(c => c !== null);
         if (idx >= 0) {
           return {
