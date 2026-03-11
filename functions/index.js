@@ -1,4 +1,4 @@
-// Fix 6 - Firebase Cloud Function als Yahoo Finance proxy
+// Fix 6 - Firebase Cloud Function als Yahoo Finance proxy 
 const functions = require('firebase-functions');
 const fetch = require('node-fetch');
 
