@@ -1,3 +1,4 @@
+// Fix 3 - Ticker info note toegevoegd
 // Fix 1 - Bewerken knop + jaar zichtbaar
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -172,8 +173,13 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         <div>
           <label className="block text-xs text-slate-400 mb-1">Ticker symbool</label>
           <input value={form.ticker} onChange={e => set('ticker', e.target.value)}
-            placeholder="bijv. ASML"
+            placeholder="bijv. ASML.AS"
             className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <p className="text-xs text-slate-500 mt-1.5">
+            💡 Nederlandse aandelen: voeg <span className="text-slate-400 font-mono">.AS</span> toe (bijv. <span className="font-mono text-slate-400">ASML.AS</span>)<br/>
+            Amerikaanse aandelen: alleen ticker (bijv. <span className="font-mono text-slate-400">AAPL</span>)<br/>
+            ETF op Euronext: gebruik <span className="font-mono text-slate-400">.AS</span> of <span className="font-mono text-slate-400">.PA</span> voor Parijs
+          </p>
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">ISIN</label>
