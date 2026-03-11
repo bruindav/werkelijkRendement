@@ -1,3 +1,5 @@
+// Fix 7 - Dec31 koers fix + transacties bewerkbaar
+// Fix 3 - Ticker uitleg notatie per land
 // Fix 3 - Ticker info note toegevoegd
 // Fix 1 - Bewerken knop + jaar zichtbaar
 import { useState } from 'react';
@@ -5,7 +7,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { usePosities } from '../hooks/useFirestore';
 import { berekenPositieRendement, formatEuro, formatPct } from '../services/berekening';
-import { zoekAandeel, haalHistorischeKoers } from '../services/koersApi';
+import { zoekAandeel, haalKoersenVoorJaar } from '../services/koersApi';
 import { Plus, Trash2, ChevronDown, ChevronUp, Search, TrendingUp, Edit3, Check, X, Loader, Calendar } from 'lucide-react';
 
 const TYPES = ['aandeel', 'obligatie', 'etf', 'anders'];
@@ -89,10 +91,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     if (!form.ticker) return;
     setLoadingKoers(true);
     try {
-      const [jan1, dec31] = await Promise.all([
-        haalHistorischeKoers(form.ticker, `${year}-01-02`),
-        haalHistorischeKoers(form.ticker, `${year}-12-31`),
-      ]);
+      const { jan1, dec31 } = await haalKoersenVoorJaar(form.ticker, year);
       if (jan1) {
         set('jan1_prijs', jan1.slotkoers.toString());
         if (form.jan1_aantal) set('jan1_waarde', (parseFloat(form.jan1_aantal) * jan1.slotkoers).toFixed(2));
@@ -101,7 +100,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         set('dec31_prijs', dec31.slotkoers.toString());
         if (form.dec31_aantal) set('dec31_waarde', (parseFloat(form.dec31_aantal) * dec31.slotkoers).toFixed(2));
       }
-    } catch (e) {}
+    } catch (e) { console.error('Koersen ophalen mislukt:', e); }
     setLoadingKoers(false);
   };
 
@@ -175,11 +174,14 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
           <input value={form.ticker} onChange={e => set('ticker', e.target.value)}
             placeholder="bijv. ASML.AS"
             className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <p className="text-xs text-slate-500 mt-1.5">
-            💡 Nederlandse aandelen: voeg <span className="text-slate-400 font-mono">.AS</span> toe (bijv. <span className="font-mono text-slate-400">ASML.AS</span>)<br/>
-            Amerikaanse aandelen: alleen ticker (bijv. <span className="font-mono text-slate-400">AAPL</span>)<br/>
-            ETF op Euronext: gebruik <span className="font-mono text-slate-400">.AS</span> of <span className="font-mono text-slate-400">.PA</span> voor Parijs
-          </p>
+          <div className="mt-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 space-y-1">
+            <p className="text-xs font-medium text-slate-400">💡 Ticker notatie:</p>
+            <p className="text-xs text-slate-500">🇳🇱 Nederlandse aandelen: <span className="text-slate-300 font-mono">ASML.AS</span>, <span className="text-slate-300 font-mono">PHIA.AS</span></p>
+            <p className="text-xs text-slate-500">🇺🇸 Amerikaanse aandelen: <span className="text-slate-300 font-mono">AAPL</span>, <span className="text-slate-300 font-mono">MSFT</span></p>
+            <p className="text-xs text-slate-500">🇩🇪 Duitse aandelen: <span className="text-slate-300 font-mono">SAP.DE</span>, <span className="text-slate-300 font-mono">BMW.DE</span></p>
+            <p className="text-xs text-slate-500">🇫🇷 Franse aandelen: <span className="text-slate-300 font-mono">MC.PA</span>, <span className="text-slate-300 font-mono">AIR.PA</span></p>
+            <p className="text-xs text-slate-500">📊 ETF: <span className="text-slate-300 font-mono">VWRL.AS</span>, <span className="text-slate-300 font-mono">IWDA.AS</span></p>
+          </div>
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">ISIN</label>
@@ -193,7 +195,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         <button onClick={haalKoersen} disabled={loadingKoers}
           className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 disabled:opacity-50">
           {loadingKoers ? <Loader className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-          Koersen automatisch ophalen voor {year}
+          Koersen ophalen voor 1 jan + 31 dec {year} (even geduld...)
         </button>
       )}
 
@@ -231,6 +233,56 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         <button onClick={onCancel} className="text-slate-400 hover:text-white text-sm px-4 py-2.5">
           Annuleren
         </button>
+      </div>
+    </div>
+  );
+}
+
+
+function TransactieRij({ transactie, kleur, onUpdate, onVerwijder }) {
+  const [bewerken, setBewerken] = useState(false);
+  const [datum, setDatum] = useState(transactie.datum);
+  const [aantal, setAantal] = useState(transactie.aantal);
+  const [prijs, setPrijs] = useState(transactie.prijs);
+  const totaal = parseFloat(aantal) * parseFloat(prijs) || 0;
+
+  const handleOpslaan = () => {
+    onUpdate({ datum, aantal: parseFloat(aantal), prijs: parseFloat(prijs), totaal });
+    setBewerken(false);
+  };
+
+  if (bewerken) {
+    return (
+      <div className="bg-slate-800 border border-blue-600/40 rounded-lg px-3 py-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+          <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
+            className="bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <input type="number" step="0.001" value={aantal} onChange={e => setAantal(e.target.value)}
+            placeholder="Aantal"
+            className="bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <input type="number" step="0.01" value={prijs} onChange={e => setPrijs(e.target.value)}
+            placeholder="Prijs"
+            className="bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <div className="bg-slate-700/50 border border-slate-700 text-slate-300 rounded px-2 py-1 text-xs">{totaal.toFixed(2)}</div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleOpslaan} className="bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 text-xs flex items-center gap-1">
+            <Check className="w-3 h-3" /> Opslaan
+          </button>
+          <button onClick={() => setBewerken(false)} className="text-slate-400 text-xs px-2">Annuleren</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between bg-slate-900/50 rounded-lg px-3 py-2 text-sm group">
+      <span className="text-slate-400">{transactie.datum}</span>
+      <span className="text-slate-300">{transactie.aantal} × {formatEuro(transactie.prijs)}</span>
+      <span className={`text-${kleur}-400 font-medium`}>{formatEuro(transactie.totaal)}</span>
+      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={() => setBewerken(true)} className="text-slate-500 hover:text-blue-400 p-0.5"><Edit3 className="w-3 h-3" /></button>
+        <button onClick={onVerwijder} className="text-slate-500 hover:text-red-400 p-0.5"><X className="w-3 h-3" /></button>
       </div>
     </div>
   );
@@ -296,6 +348,12 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
   const verwijderTransactie = async (type, idx) => {
     const huidig = [...(positie[type] || [])];
     huidig.splice(idx, 1);
+    await onUpdate(positie.id, { [type]: huidig });
+  };
+
+  const updateTransactie = async (type, idx, nieuw) => {
+    const huidig = [...(positie[type] || [])];
+    huidig[idx] = nieuw;
     await onUpdate(positie.id, { [type]: huidig });
   };
 
@@ -394,12 +452,13 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
             {positie.aankopen?.length > 0 && (
               <div className="space-y-1 mt-2">
                 {positie.aankopen.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between bg-slate-900/50 rounded-lg px-3 py-2 text-sm">
-                    <span className="text-slate-400">{a.datum}</span>
-                    <span className="text-slate-300">{a.aantal} × {formatEuro(a.prijs)}</span>
-                    <span className="text-emerald-400 font-medium">{formatEuro(a.totaal)}</span>
-                    <button onClick={() => verwijderTransactie('aankopen', i)} className="text-slate-600 hover:text-red-400 ml-2"><X className="w-3 h-3" /></button>
-                  </div>
+                  <TransactieRij
+                    key={i}
+                    transactie={a}
+                    kleur="emerald"
+                    onUpdate={(t) => updateTransactie('aankopen', i, t)}
+                    onVerwijder={() => verwijderTransactie('aankopen', i)}
+                  />
                 ))}
               </div>
             )}
@@ -416,12 +475,13 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
             {positie.verkopen?.length > 0 && (
               <div className="space-y-1 mt-2">
                 {positie.verkopen.map((v, i) => (
-                  <div key={i} className="flex items-center justify-between bg-slate-900/50 rounded-lg px-3 py-2 text-sm">
-                    <span className="text-slate-400">{v.datum}</span>
-                    <span className="text-slate-300">{v.aantal} × {formatEuro(v.prijs)}</span>
-                    <span className="text-red-400 font-medium">{formatEuro(v.totaal)}</span>
-                    <button onClick={() => verwijderTransactie('verkopen', i)} className="text-slate-600 hover:text-red-400 ml-2"><X className="w-3 h-3" /></button>
-                  </div>
+                  <TransactieRij
+                    key={i}
+                    transactie={v}
+                    kleur="red"
+                    onUpdate={(t) => updateTransactie('verkopen', i, t)}
+                    onVerwijder={() => verwijderTransactie('verkopen', i)}
+                  />
                 ))}
               </div>
             )}
@@ -513,3 +573,4 @@ export default function PositieLijst() {
     </div>
   );
 }
+
