@@ -164,3 +164,28 @@ export function useSpaargelden(uid, year, bankId, accountId) {
 
   return { spaargelden, loading, voegSpaargeldToe, updateSpaargeld, verwijderSpaargeld };
 }
+
+// ============ SINGLE DOCUMENT HOOKS (voor breadcrumbs) ============
+export function useBank(uid, year, bankId) {
+  const [bank, setBank] = useState(null);
+  useEffect(() => {
+    if (!uid || !year || !bankId) return;
+    const ref = doc(db, banksPath(uid, year), bankId);
+    return onSnapshot(ref, (snap) => {
+      setBank(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    });
+  }, [uid, year, bankId]);
+  return bank;
+}
+
+export function useRekening(uid, year, bankId, accountId) {
+  const [rekening, setRekening] = useState(null);
+  useEffect(() => {
+    if (!uid || !year || !bankId || !accountId) return;
+    const ref = doc(db, accountsPath(uid, year, bankId), accountId);
+    return onSnapshot(ref, (snap) => {
+      setRekening(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    });
+  }, [uid, year, bankId, accountId]);
+  return rekening;
+}
