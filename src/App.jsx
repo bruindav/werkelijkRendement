@@ -29,7 +29,7 @@ function AppRoutes() {
       <Route path="/jaar/:year" element={<AuthGuard><JaarOverzicht /></AuthGuard>} />
       <Route path="/jaar/:year/bank/:bankId" element={<AuthGuard><BankDetail /></AuthGuard>} />
       <Route path="/jaar/:year/bank/:bankId/rekening/:accountId" element={<AuthGuard><PositieLijst /></AuthGuard>} />
-      <Route path="/jaar/:year/bank/:bankId/spaargelden" element={<AuthGuard><SpaarpaginaLijst /></AuthGuard>} />
+      <Route path="/jaar/:year/bank/:bankId/rekening/:accountId/sparen" element={<AuthGuard><SpaarpaginaLijst /></AuthGuard>} />
       <Route path="/aangifte/:year" element={<AuthGuard><AangiftePage /></AuthGuard>} />
     </Routes>
   );
