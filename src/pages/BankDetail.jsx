@@ -2,8 +2,9 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useRekeningen } from '../hooks/useFirestore';
-import { CreditCard, TrendingUp, PiggyBank, Lock, Plus, Trash2, ArrowRight, X, Check, ChevronLeft, Edit3 } from 'lucide-react';
+import { useRekeningen, useBank } from '../hooks/useFirestore';
+import Breadcrumb from '../components/Breadcrumb';
+import { CreditCard, TrendingUp, PiggyBank, Lock, Plus, Trash2, ArrowRight, X, Check, Edit3 } from 'lucide-react';
 
 const REKENING_TYPES = [
   { value: 'beleggen',     label: 'Beleggingsrekening', icon: TrendingUp, kleur: 'purple', emoji: '📈' },
@@ -129,6 +130,7 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder }) {
 export default function BankDetail() {
   const { year, bankId } = useParams();
   const { user } = useApp();
+  const bank = useBank(user?.uid, year, bankId);
   const { rekeningen, loading, voegRekeningToe, updateRekening, verwijderRekening } = useRekeningen(user?.uid, year, bankId);
   const [toonForm, setToonForm] = useState(false);
 
@@ -140,14 +142,14 @@ export default function BankDetail() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-2">
-        <Link to={`/jaar/${year}`} className="text-slate-400 hover:text-white flex items-center gap-1 text-sm">
-          <ChevronLeft className="w-4 h-4" /> Banken
-        </Link>
-      </div>
+      <Breadcrumb items={[
+        { label: `Jaar ${year}`, to: `/jaar/${year}` },
+        { label: bank?.naam || 'Bank', to: `/jaar/${year}/bank/${bankId}` },
+        { label: 'Rekeningen' },
+      ]} />
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Rekeningen</h1>
+          <h1 className="text-2xl font-bold text-white">{bank?.naam || 'Rekeningen'}</h1>
           <p className="text-slate-400 mt-1">Belastingjaar {year}</p>
         </div>
         <button onClick={() => setToonForm(true)}

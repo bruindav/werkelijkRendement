@@ -6,7 +6,8 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { usePosities } from '../hooks/useFirestore';
+import { usePosities, useBank, useRekening } from '../hooks/useFirestore';
+import Breadcrumb from '../components/Breadcrumb';
 import { berekenPositieRendement, formatEuro, formatPct } from '../services/berekening';
 import { zoekAandeel, haalKoersenVoorJaar } from '../services/koersApi';
 import { Plus, Trash2, ChevronDown, ChevronUp, Search, TrendingUp, Edit3, Check, X, Loader, Calendar } from 'lucide-react';
@@ -529,6 +530,8 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
 export default function PositieLijst() {
   const { year, bankId, accountId } = useParams();
   const { user, setIsEditing } = useApp();
+  const bank = useBank(user?.uid, year, bankId);
+  const rekening = useRekening(user?.uid, year, bankId, accountId);
   const { posities, loading, voegPositieToe, updatePositie, verwijderPositie } = usePosities(user?.uid, year, bankId, accountId);
   const [toonForm, setToonForm] = useState(false);
 
