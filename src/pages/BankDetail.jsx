@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRekeningen } from '../hooks/useFirestore';
-import { CreditCard, Plus, Trash2, ArrowRight, X, Check, ChevronLeft, Edit3 } from 'lucide-react';
+import { CreditCard, Plus, Trash2, ArrowRight, X, Check, ChevronLeft, Edit3, PiggyBank } from 'lucide-react';
 
 function RekeningForm({ onSave, onCancel, initial = {} }) {
   const [naam, setNaam] = useState(initial.naam || '');
@@ -106,10 +106,16 @@ export default function BankDetail() {
           <h1 className="text-2xl font-bold text-white">Rekeningen</h1>
           <p className="text-slate-400 mt-1">Belastingjaar {year}</p>
         </div>
-        <button onClick={() => setToonForm(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium">
-          <Plus className="w-4 h-4" /> Rekening toevoegen
-        </button>
+        <div className="flex gap-2">
+          <Link to={`/jaar/${year}/bank/${bankId}/spaargelden`}
+            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2.5 text-sm font-medium">
+            <PiggyBank className="w-4 h-4" /> Spaargelden
+          </Link>
+          <button onClick={() => setToonForm(true)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium">
+            <Plus className="w-4 h-4" /> Rekening toevoegen
+          </button>
+        </div>
       </div>
 
       {toonForm && (
