@@ -136,30 +136,31 @@ export async function kopieerJaar(uid, vanJaar, naarJaar) {
   }
 }
 
-// ============ SPAARGELDEN & DEPOSITO'S ============
-const spaargeldPath = (uid, year, bankId) =>
-  `users/${uid}/years/${year}/banks/${bankId}/spaargelden`;
+// ============ SPAARGELDEN & DEPOSITO'S (onder rekening) ============
+// Opgeslagen als velden op de rekening zelf — simpele single-document aanpak
+const spaargeldPath = (uid, year, bankId, accountId) =>
+  `users/${uid}/years/${year}/banks/${bankId}/accounts/${accountId}/spaargelden`;
 
-export function useSpaargelden(uid, year, bankId) {
+export function useSpaargelden(uid, year, bankId, accountId) {
   const [spaargelden, setSpaargelden] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!uid || !year || !bankId) return;
-    const ref = collection(db, spaargeldPath(uid, year, bankId));
+    if (!uid || !year || !bankId || !accountId) return;
+    const ref = collection(db, spaargeldPath(uid, year, bankId, accountId));
     const unsub = onSnapshot(ref, (snap) => {
       setSpaargelden(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
     return unsub;
-  }, [uid, year, bankId]);
+  }, [uid, year, bankId, accountId]);
 
   const voegSpaargeldToe = (data) =>
-    addDoc(collection(db, spaargeldPath(uid, year, bankId)), data);
+    addDoc(collection(db, spaargeldPath(uid, year, bankId, accountId)), data);
   const updateSpaargeld = (id, data) =>
-    updateDoc(doc(db, spaargeldPath(uid, year, bankId), id), data);
+    updateDoc(doc(db, spaargeldPath(uid, year, bankId, accountId), id), data);
   const verwijderSpaargeld = (id) =>
-    deleteDoc(doc(db, spaargeldPath(uid, year, bankId), id));
+    deleteDoc(doc(db, spaargeldPath(uid, year, bankId, accountId), id));
 
   return { spaargelden, loading, voegSpaargeldToe, updateSpaargeld, verwijderSpaargeld };
 }
