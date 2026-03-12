@@ -135,3 +135,31 @@ export async function kopieerJaar(uid, vanJaar, naarJaar) {
     }
   }
 }
+
+// ============ SPAARGELDEN & DEPOSITO'S ============
+const spaargeldPath = (uid, year, bankId) =>
+  `users/${uid}/years/${year}/banks/${bankId}/spaargelden`;
+
+export function useSpaargelden(uid, year, bankId) {
+  const [spaargelden, setSpaargelden] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!uid || !year || !bankId) return;
+    const ref = collection(db, spaargeldPath(uid, year, bankId));
+    const unsub = onSnapshot(ref, (snap) => {
+      setSpaargelden(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return unsub;
+  }, [uid, year, bankId]);
+
+  const voegSpaargeldToe = (data) =>
+    addDoc(collection(db, spaargeldPath(uid, year, bankId)), data);
+  const updateSpaargeld = (id, data) =>
+    updateDoc(doc(db, spaargeldPath(uid, year, bankId), id), data);
+  const verwijderSpaargeld = (id) =>
+    deleteDoc(doc(db, spaargeldPath(uid, year, bankId), id));
+
+  return { spaargelden, loading, voegSpaargeldToe, updateSpaargeld, verwijderSpaargeld };
+}
