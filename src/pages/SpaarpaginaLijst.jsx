@@ -314,10 +314,10 @@ function SpaarKaart({ spaar, year, onUpdate, onVerwijder }) {
 }
 
 export default function SpaarpaginaLijst() {
-  const { year, bankId } = useParams();
+  const { year, bankId, accountId } = useParams();
   const { user, setIsEditing } = useApp();
   const { spaargelden, loading, voegSpaargeldToe, updateSpaargeld, verwijderSpaargeld } =
-    useSpaargelden(user?.uid, year, bankId);
+    useSpaargelden(user?.uid, year, bankId, accountId);
   const [toonForm, setToonForm] = useState(false);
 
   const totaalRendement = spaargelden.reduce((sum, s) =>
