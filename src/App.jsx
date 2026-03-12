@@ -7,6 +7,7 @@ import JaarOverzicht from './pages/JaarOverzicht';
 import BankDetail from './pages/BankDetail';
 import PositieLijst from './pages/PositieLijst';
 import AangiftePage from './pages/AangiftePage';
+import SpaarpaginaLijst from './pages/SpaarpaginaLijst';
 
 function AuthGuard({ children }) {
   const { user, loading } = useApp();
@@ -28,6 +29,7 @@ function AppRoutes() {
       <Route path="/jaar/:year" element={<AuthGuard><JaarOverzicht /></AuthGuard>} />
       <Route path="/jaar/:year/bank/:bankId" element={<AuthGuard><BankDetail /></AuthGuard>} />
       <Route path="/jaar/:year/bank/:bankId/rekening/:accountId" element={<AuthGuard><PositieLijst /></AuthGuard>} />
+      <Route path="/jaar/:year/bank/:bankId/spaargelden" element={<AuthGuard><SpaarpaginaLijst /></AuthGuard>} />
       <Route path="/aangifte/:year" element={<AuthGuard><AangiftePage /></AuthGuard>} />
     </Routes>
   );
