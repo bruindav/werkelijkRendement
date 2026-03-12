@@ -121,3 +121,21 @@ export function formatEuro(amount) {
 export function formatPct(pct) {
   return `${(pct || 0).toFixed(2)}%`;
 }
+
+// Fix 11 - Berekening werkelijk rendement voor spaargeld/deposito
+export function berekenSpaarRendement(spaar) {
+  const ontvangen_rente = spaar.ontvangen_rente || 0;
+  const kosten = spaar.kosten || 0;
+  const nettoRendement = ontvangen_rente - kosten;
+  const jan1_saldo = spaar.jan1_saldo || 0;
+  const rendementPct = jan1_saldo > 0 ? (nettoRendement / jan1_saldo) * 100 : 0;
+
+  return {
+    jan1_saldo,
+    dec31_saldo: spaar.dec31_saldo || 0,
+    ontvangen_rente,
+    kosten,
+    nettoRendement,
+    rendementPct,
+  };
+}
