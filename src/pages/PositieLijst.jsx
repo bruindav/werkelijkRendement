@@ -218,13 +218,13 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         <button onClick={haalKoersen} disabled={loadingKoers}
           className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 disabled:opacity-50">
           {loadingKoers ? <Loader className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-          Koersen ophalen voor 1 jan + 31 dec {year} (even geduld...)
+          Koersen ophalen 1 jan + 31 dec
         </button>
       )}
 
       <div>
         <p className="text-sm font-medium text-slate-300 mb-3">📅 Waarden per 1 januari {year}</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {numField('Aantal', 'jan1_aantal', 'jan1')}
           {numField('Prijs (€)', 'jan1_prijs', 'jan1')}
           {numField('Waarde (€)', 'jan1_waarde', 'jan1', true)}
@@ -233,7 +233,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
 
       <div>
         <p className="text-sm font-medium text-slate-300 mb-3">📅 Waarden per 31 december {year}</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {numField('Aantal', 'dec31_aantal', 'dec31')}
           {numField('Prijs (€)', 'dec31_prijs', 'dec31')}
           {numField('Waarde (€)', 'dec31_waarde', 'dec31', true)}
@@ -242,7 +242,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
 
       <div>
         <p className="text-sm font-medium text-slate-300 mb-3">💰 Inkomen & Kosten in {year}</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {numField('Dividend ontvangen (€)', 'dividend', null)}
           {numField('Rente ontvangen (€)', 'rente', null)}
           <div>
@@ -285,7 +285,7 @@ function TransactieRij({ transactie, kleur, onUpdate, onVerwijder }) {
   if (bewerken) {
     return (
       <div className="bg-slate-800 border border-blue-600/40 rounded-lg px-3 py-2">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
             className="bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
           <input type="number" step="0.001" value={aantal} onChange={e => setAantal(e.target.value)}
@@ -307,7 +307,7 @@ function TransactieRij({ transactie, kleur, onUpdate, onVerwijder }) {
   }
 
   return (
-    <div className="flex items-center justify-between bg-slate-900/50 rounded-lg px-3 py-2 text-sm group">
+    <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-3 gap-y-1 bg-slate-900/50 rounded-lg px-3 py-2 text-sm group">
       <span className="text-slate-400">{transactie.datum}</span>
       <span className="text-slate-300">{transactie.aantal} × {formatEuro(transactie.prijs)}</span>
       <span className={`text-${kleur}-400 font-medium`}>{formatEuro(transactie.totaal)}</span>
@@ -328,7 +328,7 @@ function TransactieForm({ type, onSave, onCancel }) {
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 mt-2">
       <p className="text-sm font-medium text-slate-300 mb-3">{type === 'aankoop' ? 'Aankoop' : 'Verkoop'} toevoegen</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
         <div>
           <label className="text-xs text-slate-400 block mb-1">Datum</label>
           <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
@@ -406,7 +406,7 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
 
   return (
     <div className="bg-slate-800/40 border border-slate-700 rounded-2xl overflow-hidden">
-      <div className="p-4 flex items-center gap-3 cursor-pointer" onClick={() => setOpen(!open)}>
+      <div className="p-4 flex items-start gap-3 cursor-pointer" onClick={() => setOpen(!open)}>
         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${pos ? 'bg-emerald-400' : 'bg-red-400'}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -414,7 +414,7 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
             <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">{positie.type}</span>
             {positie.ticker && <span className="text-xs text-blue-400 font-mono">{positie.ticker}</span>}
           </div>
-          <div className="flex items-center gap-4 mt-1 text-sm flex-wrap">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm">
             <span className="text-slate-400">1/1/{year}: {formatEuro(r.waardeJan1)}</span>
             <span className="text-slate-400">31/12/{year}: {formatEuro(r.waardeDec31)}</span>
             <span className={`font-medium ${pos ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -439,7 +439,7 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
 
       {open && (
         <div className="border-t border-slate-700 p-4 space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {[
               { label: `1 jan ${year} - Aantal`, val: positie.jan1_aantal },
               { label: `1 jan ${year} - Prijs`, val: formatEuro(positie.jan1_prijs) },
@@ -453,7 +453,7 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
             ))}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="bg-slate-900/50 rounded-xl p-3">
               <p className="text-xs text-slate-500">Koersresultaat</p>
               <p className={`text-sm font-medium mt-0.5 ${r.koersresultaat >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatEuro(r.koersresultaat)}</p>
@@ -477,7 +477,7 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
               <p className="text-sm font-medium text-slate-300">Aankopen ({positie.aankopen?.length || 0})</p>
               <button onClick={() => setToonAankoop(!toonAankoop)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
                 <Plus className="w-3 h-3" /> Toevoegen
@@ -500,7 +500,7 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
               <p className="text-sm font-medium text-slate-300">Verkopen ({positie.verkopen?.length || 0})</p>
               <button onClick={() => setToonVerkoop(!toonVerkoop)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
                 <Plus className="w-3 h-3" /> Toevoegen
@@ -542,7 +542,7 @@ export default function PositieLijst() {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-2 text-sm text-slate-400">
+      <div className="flex flex-wrap items-center gap-2 mb-2 text-sm text-slate-400">
         <Link to={`/jaar/${year}`} className="hover:text-white">Banken</Link>
         <span>/</span>
         <Link to={`/jaar/${year}/bank/${bankId}`} className="hover:text-white">Rekeningen</Link>
@@ -550,14 +550,14 @@ export default function PositieLijst() {
         <span className="text-slate-300">Posities</span>
       </div>
 
-      <div className="flex items-center gap-2 bg-blue-950/60 border border-blue-800/40 rounded-xl px-4 py-2.5 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-blue-950/60 border border-blue-800/40 rounded-xl px-4 py-2.5 mb-4">
         <Calendar className="w-4 h-4 text-blue-400" />
         <span className="text-blue-300 text-sm">
           Je bekijkt en bewerkt gegevens voor belastingjaar <strong className="text-white">{year}</strong>
         </span>
       </div>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Posities</h1>
           <p className="text-slate-400 mt-1">

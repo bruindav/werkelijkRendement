@@ -24,7 +24,7 @@ function RekeningForm({ onSave, onCancel, initial = {} }) {
       {/* Type kiezen */}
       <div>
         <label className="block text-xs text-slate-400 mb-2">Type rekening</label>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {REKENING_TYPES.map(t => (
             <button key={t.value} onClick={() => setType(t.value)}
               className={`flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-colors text-center ${
@@ -40,7 +40,7 @@ function RekeningForm({ onSave, onCancel, initial = {} }) {
       </div>
 
       {/* Naam + kosten */}
-      <div className="flex gap-3 items-start">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
         <div className="flex-1">
           <label className="block text-xs text-slate-400 mb-1">Naam rekening</label>
           <input autoFocus value={naam} onChange={e => setNaam(e.target.value)}
@@ -48,7 +48,7 @@ function RekeningForm({ onSave, onCancel, initial = {} }) {
             className="w-full bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             onKeyDown={e => e.key === 'Enter' && naam && onSave({ naam, type, kosten: parseFloat(kosten) || 0 })} />
         </div>
-        <div className="w-36">
+        <div className="w-full sm:w-36">
           <label className="block text-xs text-slate-400 mb-1">Kosten (€) <span className="text-slate-500">aftrekbaar</span></label>
           <input type="number" step="0.01" value={kosten} onChange={e => setKosten(e.target.value)}
             placeholder="0.00"
@@ -91,7 +91,7 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder }) {
   }
 
   return (
-    <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-5 flex items-center justify-between group">
+    <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 sm:p-5 flex items-center gap-3 group">
       <Link to={doelUrl} className="flex items-center gap-4 flex-1">
         <div className={`w-11 h-11 bg-${info.kleur}-600/20 border border-${info.kleur}-600/30 rounded-xl flex items-center justify-center text-xl`}>
           {info.emoji}
@@ -147,7 +147,7 @@ export default function BankDetail() {
         { label: bank?.naam || 'Bank', to: `/jaar/${year}/bank/${bankId}` },
         { label: 'Rekeningen' },
       ]} />
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">{bank?.naam || 'Rekeningen'}</h1>
           <p className="text-slate-400 mt-1">Belastingjaar {year}</p>

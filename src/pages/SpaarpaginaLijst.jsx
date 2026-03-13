@@ -139,7 +139,7 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
       {/* Saldi */}
       <div>
         <p className="text-sm font-medium text-slate-300 mb-3">💰 Saldo {year}</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {inp(`Saldo 1 januari (€)`, 'jan1_saldo')}
           {inp(`Saldo 31 december (€)`, 'dec31_saldo')}
         </div>
@@ -149,7 +149,7 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
       {isDeposito && (
         <div>
           <p className="text-sm font-medium text-slate-300 mb-3">🔒 Looptijd deposito</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {inp('Startdatum', 'deposito_startdatum', { type: 'date' })}
             {inp('Einddatum', 'deposito_einddatum', { type: 'date' })}
           </div>
@@ -159,7 +159,7 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
       {/* Rente */}
       <div>
         <p className="text-sm font-medium text-slate-300 mb-3">📈 Rente</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs text-slate-400 mb-1">Rente % (per jaar)</label>
             <div className="relative">
@@ -182,7 +182,7 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
               {verwachtRenteJaar !== null &&
                 <span className="ml-1 text-emerald-500 text-xs">≈ {formatEuro(verwachtRenteJaar)}</span>}
             </label>
-            <div className="flex gap-1">
+            <div className="flex gap-1 min-w-0">
               <input type="number" step="0.01" value={form.ontvangen_rente}
                 onChange={e => set('ontvangen_rente', e.target.value)}
                 placeholder="0.00"
@@ -208,7 +208,7 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
           <p className="text-xs text-amber-400 font-medium mb-2 flex items-center gap-1">
             <Calculator className="w-3.5 h-3.5" /> Verwacht eindbedrag op einddatum ({depositoCalc.jaren} jaar)
           </p>
-          <div className="grid grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <div>
               <p className="text-xs text-slate-500">Inleg</p>
               <p className="text-white font-medium">{formatEuro(form.jan1_saldo)}</p>
@@ -307,7 +307,7 @@ function SpaarKaart({ spaar, rekeningType, year, onUpdate, onVerwijder }) {
               </span>
             )}
           </div>
-          <div className="flex gap-4 mt-1 flex-wrap text-sm">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-sm">
             <span className="text-slate-400">Saldo: <span className="text-white">{formatEuro(spaar.jan1_saldo)}</span></span>
             <span className="text-emerald-400">Rente: +{formatEuro(spaar.ontvangen_rente)}</span>
             {spaar.kosten > 0 && <span className="text-red-400">Kosten: -{formatEuro(spaar.kosten)}</span>}
@@ -336,7 +336,7 @@ function SpaarKaart({ spaar, rekeningType, year, onUpdate, onVerwijder }) {
 
       {open && (
         <div className="border-t border-slate-700/50 p-5 space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="bg-slate-900/50 rounded-xl p-3">
               <p className="text-xs text-slate-500">Saldo 1 jan</p>
               <p className="text-sm font-medium text-white mt-0.5">{formatEuro(spaar.jan1_saldo)}</p>
@@ -360,7 +360,7 @@ function SpaarKaart({ spaar, rekeningType, year, onUpdate, onVerwijder }) {
               <p className="text-xs text-amber-400 font-medium flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" /> Looptijd deposito
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                 {spaar.deposito_startdatum && (
                   <div>
                     <p className="text-xs text-slate-500">Startdatum</p>
@@ -424,7 +424,7 @@ export default function SpaarpaginaLijst() {
         { label: rekening?.naam || (isDeposito ? 'Deposito' : 'Spaarrekening') },
       ]} />
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             {isDeposito ? '🔒' : '🏦'} {rekening?.naam || (isDeposito ? 'Deposito' : 'Spaarrekening')}
@@ -440,7 +440,7 @@ export default function SpaarpaginaLijst() {
       </div>
 
       {spaargelden.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
           <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-4">
             <p className="text-xs text-slate-500">Saldo 31 december</p>
             <p className="text-xl font-bold text-white mt-1">
