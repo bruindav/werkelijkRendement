@@ -1,22 +1,25 @@
 // PDF Parser - volledig client-side met pdf.js
-// Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO
-// Beleggingsoverzicht Centraal Beheer (meerdere jaren)
+// Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO, Evi (Van Lanschot)
 
 // ============ BEDRAG PARSER ============
 function parseBedrag(s) {
   if (!s) return 0;
   const clean = String(s)
-    .replace(/€/g, '')
-    .replace(/\s/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-    .trim();
+    .replace(/€/g, '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.').trim();
   return parseFloat(clean) || 0;
+}
+
+function maakLeesbaar(naam) {
+  let s = naam.replace(/([a-z])([A-Z])/g, '$1 $2');
+  s = s.replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2');
+  s = s.replace(/-/g, ' - ').replace(/  +/g, ' ').trim();
+  return s;
 }
 
 // ============ BANK DETECTIE ============
 export function detectBankType(text) {
-  if (text.includes('Evi') && (text.includes('Van Lanschot') || text.includes('Fiscaal jaaroverzicht'))) return 'evi';
+  if (text.includes('Evi') && text.includes('Van Lanschot')) return 'evi';
+  if (text.includes('Fiscaal jaaroverzicht') && text.includes('Vermogen per')) return 'evi';
   if (text.includes('Centraal Beheer') || text.includes('RentePlús') || text.includes('RenteVast')) {
     if (text.includes('Beleggingsrekening') && text.includes('Waarde 1 januari')) return 'cb_beleggen';
     return 'centraal_beheer';
@@ -37,13 +40,10 @@ function parseCentraalBeheer(text) {
     const lines = blok.trim().split('\n');
     const naam = lines[0]?.trim();
     if (!naam || naam.length < 3) continue;
-
     const rekMatch = blok.match(/Rekeningnummer:\s*(.+)/);
     const rekeningnummer = rekMatch ? rekMatch[1].trim() : '';
-
     const saldi = [...blok.matchAll(/Saldo 01-01-\d{4}\s*€\s*([\d.,]+)/g)].map(m => parseBedrag(m[1]));
     const renteMatch = blok.match(/Totaal ontvangen rente in \d{4}\s*€\s*([\d.,]+)/);
-
     if (saldi.length >= 1 && renteMatch) {
       rekeningen.push({
         naam: naam + (rekeningnummer ? ` (${rekeningnummer})` : ''),
@@ -53,27 +53,19 @@ function parseCentraalBeheer(text) {
         jan1_saldo: saldi[0] || 0,
         dec31_saldo: saldi[1] || saldi[0] || 0,
         ontvangen_rente: parseBedrag(renteMatch[1]),
-        rente_pct: 0,
-        kosten: 0,
-        notitie: '',
+        rente_pct: 0, kosten: 0, notitie: '',
       });
     }
   }
-
   return { bank: 'Centraal Beheer', jaar, rekeningen, type: 'centraal_beheer' };
 }
 
-// ============ CENTRAAL BEHEER BELEGGEN (meerdere jaren) ============
+// ============ CENTRAAL BEHEER BELEGGEN ============
 function parseCBBeleggen(text) {
-  const resultatenPerJaar = [];
-
-  // Haal rekening nummer op
   const rekMatch = text.match(/Beleggingsrekening:\s*(\S+)/);
   const rekeningnummer = rekMatch ? rekMatch[1] : 'Beleggingsrekening';
-
-  // Tabel regels: jaar + 5 bedragen
+  const resultatenPerJaar = [];
   const regelPattern = /^(\d{4})\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)/gm;
-
   for (const m of text.matchAll(regelPattern)) {
     const [, jaar, waarde_jan, waarde_dec, aankopen, verkopen, dividend] = m;
     resultatenPerJaar.push({
@@ -91,13 +83,7 @@ function parseCBBeleggen(text) {
       }
     });
   }
-
-  return {
-    bank: 'Centraal Beheer',
-    type: 'cb_beleggen',
-    meerdere_jaren: true,
-    jaren: resultatenPerJaar,
-  };
+  return { bank: 'Centraal Beheer', type: 'cb_beleggen', meerdere_jaren: true, jaren: resultatenPerJaar };
 }
 
 // ============ RAISIN ============
@@ -105,16 +91,19 @@ function parseRaisin(text) {
   const jaarMatch = text.match(/Jaaroverzicht (\d{4})/i);
   const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
   const rekeningen = [];
-
-  // Groepeer per partnerbank (voor de bank-structuur in de app)
   const bankGroepen = {};
 
-  const pattern = /KENMERK:\s*(\S+)\s+EUR\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+[\d.,]+\s+[\d.,]+\s+[\d.,]+\nLAND:\s*(.+?)\nIBAN:\s*(\S+)\nBANK:\s*(.+?)\nOMSCHRIJVING:\s*(.+?)(?=\nKENMERK:|Saldomededeling|Over dit Financieel|$)/gms;
+  // Na Y-grouping staat elke rij op één lijn:
+  // "KENMERK: FDA_121_929_128_236 EUR 0,00 5.000,00 0,00 0,00 0,00 0,00"
+  // "LAND: Duitsland"
+  // "IBAN: DE02503302002355109006"
+  // "BANK: Aareal Bank"
+  // "OMSCHRIJVING: DEPOSITO 84 MAANDEN 3.00%"
+  const pattern = /KENMERK:\s*(\S+)\s+EUR\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+[\d.,]+\s+[\d.,]+\s+[\d.,]+[\s\S]*?LAND:\s*(.+?)\n[\s\S]*?IBAN:\s*(\S+)\n[\s\S]*?BANK:\s*(.+?)\n[\s\S]*?OMSCHRIJVING:\s*(.+?)(?=\nKENMERK:|\nSaldomededeling|$)/gm;
 
   for (const m of text.matchAll(pattern)) {
     const [, kenmerk, saldo_jan, saldo_dec, rente_bruto, land, iban, bank, omschrijving] = m;
-    const omschr = omschrijving.trim().replace(/\n.*/s, '').trim();
-
+    const omschr = omschrijving.trim().split('\n')[0].trim();
     const renteMatch = omschr.match(/(\d+[.,]\d+)%/);
     const maandenMatch = omschr.match(/(\d+)\s*MAANDEN/i);
     const isDeposito = omschr.toUpperCase().includes('DEPOSITO');
@@ -137,19 +126,12 @@ function parseRaisin(text) {
       notitie: `${land.trim()} - ${iban.trim()}`,
     };
 
-    // Groepeer per partnerbank
     if (!bankGroepen[bankNaam]) bankGroepen[bankNaam] = [];
     bankGroepen[bankNaam].push(rec);
     rekeningen.push(rec);
   }
 
-  return {
-    bank: 'Raisin',
-    jaar,
-    rekeningen,
-    bankGroepen, // voor groepering in de preview
-    type: 'raisin',
-  };
+  return { bank: 'Raisin', jaar, rekeningen, bankGroepen, type: 'raisin' };
 }
 
 // ============ ABN AMRO ============
@@ -157,8 +139,6 @@ function parseAbnAmro(text) {
   const jaarMatch = text.match(/Jaaroverzicht (\d{4})/i);
   const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
   const rekeningen = [];
-
-  // Zoek IBAN regels met saldo's
   const ibanPattern = /(NL\d{2}\s+[A-Z]{4}\s+[\d\s]+)\n(.+?)\n\s*([\d.,]+)\s+([\d.,]+)/gm;
   for (const m of text.matchAll(ibanPattern)) {
     const [, iban_raw, naam, saldo1, saldo2] = m;
@@ -166,172 +146,129 @@ function parseAbnAmro(text) {
     if (!iban.startsWith('NL')) continue;
     const naamClean = naam.trim();
     if (naamClean.length < 2) continue;
-
     rekeningen.push({
       naam: `${naamClean} (${iban})`,
       weergave_naam: naamClean,
-      type: 'sparen',
-      iban,
+      type: 'sparen', iban,
       jan1_saldo: parseBedrag(saldo1),
       dec31_saldo: parseBedrag(saldo2),
-      ontvangen_rente: 0,
-      rente_pct: 0,
-      kosten: 0,
-      notitie: '',
+      ontvangen_rente: 0, rente_pct: 0, kosten: 0, notitie: '',
+    });
+  }
+  return { bank: 'ABN AMRO', jaar, rekeningen, type: 'abn_amro' };
+}
+
+// ============ EVI (VAN LANSCHOT) - tekst-gebaseerd na Y-grouping ============
+function parseEviTekst(text) {
+  // Na Y-grouping ziet de tekst er zo uit:
+  // "Vermogen per 01-01-2025"
+  // "Fonds Waarde"
+  // "RobecoGlobalStarsEquitiesFund-EURG €1.349,57"
+  // ...
+  // "Vermogen per 31-12-2025"
+  // ...
+
+  const jaarMatch = text.match(/jaaroverzicht.*?(\d{4})/i)
+    || text.match(/jaar\s+(\d{4})/i)
+    || text.match(/(\d{4})/);
+  const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
+
+  // Rekeningnummer: staat op eigen rij na "Rekeningnummer"
+  const rekMatch = text.match(/Rekeningnummer\s+(\d{6,})/i);
+  const rekeningnummer = rekMatch ? rekMatch[1] : '';
+
+  const fondsenJan = {};
+  const fondsenDec = {};
+  const dividendenBruto = {};
+
+  // Split in secties
+  const janMatch = text.match(/Vermogen per 01-01-\d{4}([\s\S]+?)Vermogen per 31-12-/);
+  const decMatch = text.match(/Vermogen per 31-12-\d{4}([\s\S]+?)(?:Ontvangen rente|$)/);
+  const divMatch = text.match(/Dividend binnenland([\s\S]+?)Dividend buitenland/);
+
+  const parseSecieFondsen = (blok, target) => {
+    if (!blok) return;
+    for (const line of blok.split('\n')) {
+      // Patroon: "FondsNaamAaneengeplakt €1.234,56"
+      const m = line.match(/^([A-Z][A-Za-z0-9\-]+)\s+€([\d.,]+)$/);
+      if (m) {
+        const naam = m[1].trim();
+        const skip = new Set(['Totaalbeleggingen', 'Totaal', 'Spaartegoed', 'Fonds']);
+        if (!skip.has(naam)) {
+          target[naam] = parseBedrag(m[2]);
+        }
+      }
+    }
+  };
+
+  parseSecieFondsen(janMatch?.[1], fondsenJan);
+  parseSecieFondsen(decMatch?.[1], fondsenDec);
+
+  // Dividenden: "FondsNaam €17,36 €2,60 €14,76"
+  if (divMatch) {
+    for (const line of divMatch[1].split('\n')) {
+      const m = line.match(/^([A-Z][A-Za-z0-9\-]+)\s+€([\d.,]+)\s+€([\d.,]+)\s+€([\d.,]+)/);
+      if (m && m[1] !== 'Totaal') {
+        dividendenBruto[m[1]] = parseBedrag(m[2]); // bruto dividend
+      }
+    }
+  }
+
+  // Bouw posities
+  const alleNamen = new Set([...Object.keys(fondsenJan), ...Object.keys(fondsenDec)]);
+  const skip = new Set(['Fonds', 'Waarde', 'Totaalbeleggingen', 'Totaal', 'Spaartegoed']);
+  const posities = [];
+
+  for (const naam of [...alleNamen].sort()) {
+    if (skip.has(naam)) continue;
+    // Dividend matchen via prefix
+    let div = 0;
+    for (const [dn, dv] of Object.entries(dividendenBruto)) {
+      if (naam.startsWith(dn.substring(0, 20)) || dn.startsWith(naam.substring(0, 20))) {
+        div = dv; break;
+      }
+    }
+    posities.push({
+      naam: maakLeesbaar(naam),
+      naam_raw: naam,
+      type: 'fonds',
+      jan1_waarde: fondsenJan[naam] || 0,
+      dec31_waarde: fondsenDec[naam] || 0,
+      dividend: div,
     });
   }
 
-  return { bank: 'ABN AMRO', jaar, rekeningen, type: 'abn_amro' };
+  return {
+    bank: 'Evi (Van Lanschot)',
+    type: 'evi',
+    jaar,
+    rekeningen: [{
+      naam: `Beleggingsrekening (${rekeningnummer})`,
+      weergave_naam: 'Beleggingsrekening',
+      type: 'beleggen',
+      rekeningnummer,
+      posities,
+    }]
+  };
 }
 
 // ============ HOOFD PARSE FUNCTIE ============
 export function parseerPDF(text) {
-  // Evi heeft speciale parser (positie-gebaseerd), wordt apart afgehandeld via parseEviPDF
-  // Als toch via text: geef hint terug
   const type = detectBankType(text);
-
   switch (type) {
     case 'centraal_beheer': return parseCentraalBeheer(text);
-    case 'evi':             return { bank: 'Evi (Van Lanschot)', type: 'evi', jaar: null, rekeningen: [],
-                                    _requiresEviParser: true };
     case 'cb_beleggen':     return parseCBBeleggen(text);
     case 'raisin':          return parseRaisin(text);
     case 'abn_amro':        return parseAbnAmro(text);
+    case 'evi':             return parseEviTekst(text);
     default:
       return { bank: 'Onbekend', jaar: null, rekeningen: [], type: 'onbekend',
-               fout: 'Bank niet herkend. Ondersteund: Centraal Beheer, Raisin, ABN AMRO.' };
+               fout: 'Bank niet herkend. Ondersteund: Centraal Beheer, Raisin, ABN AMRO, Evi.' };
   }
 }
 
-// ============ EVI (VAN LANSCHOT) ============
-// Evi plakt woorden aaneeen in de PDF. We gebruiken positie-info van pdf.js
-// om fondsnamen (links) te koppelen aan bedragen (rechts).
-// pdf.js geeft ons via getTextContent() items met transform [sx,0,0,sy,tx,ty]
-// waarbij tx = x-positie en ty = y-positie.
-
-function maakLeesbaar(naam) {
-  // RobecoGlobalStarsEquitiesFund-EURG -> Robeco Global Stars Equities Fund - EUR G
-  let s = naam.replace(/([a-z])([A-Z])/g, '$1 $2');
-  s = s.replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2');
-  s = s.replace(/-/g, ' - ').replace(/  +/g, ' ').trim();
-  return s;
-}
-
+// Evi heeft geen aparte async parser meer nodig - werkt via parseerPDF
 export async function parseEviPDF(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const pdfjsLib = window['pdfjs-dist/build/pdf'];
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise;
-
-        let jaar = null;
-        let rekeningnummer = '';
-        const fondsenJan = {};
-        const fondsenDec = {};
-        const dividendenBruto = {};
-        let sectie = null;
-
-        for (let p = 1; p <= pdf.numPages; p++) {
-          const page = await pdf.getPage(p);
-          const content = await page.getTextContent();
-
-          // Bouw een lijst van woorden met x/y posities
-          const items = content.items.map(item => ({
-            tekst: item.str.trim(),
-            x: item.transform[4],
-            y: item.transform[5],
-          })).filter(i => i.tekst.length > 0);
-
-          for (let i = 0; i < items.length; i++) {
-            const { tekst, x, y } = items[i];
-
-            // Jaar detectie
-            const jaarM = tekst.match(/jaar(\d{4})/i);
-            if (jaarM && !jaar) jaar = parseInt(jaarM[1]);
-
-            // Rekeningnummer
-            if (!rekeningnummer && /^\d{6,}$/.test(tekst) && x > 200) {
-              rekeningnummer = tekst;
-            }
-
-            // Sectie wissels
-            if (tekst === 'Vermogen') {
-              const nxt2 = items[i + 2]?.tekst || '';
-              if (nxt2.includes('01-01')) sectie = 'jan';
-              else if (nxt2.includes('31-12')) sectie = 'dec';
-            }
-            if (tekst === 'Dividend') {
-              const nxt = items[i + 1]?.tekst?.toLowerCase() || '';
-              if (nxt.includes('binnen')) sectie = 'div';
-              else if (nxt.includes('buiten')) sectie = null;
-            }
-
-            // Bedrag detectie (x > 400 of ~241 voor dividend)
-            if (tekst.startsWith('€')) {
-              const bedrag = parseBedrag(tekst);
-
-              if (sectie === 'jan' && x > 400) {
-                // Zoek fondsNaam op zelfde y
-                const fonds = items.find(it => Math.abs(it.y - y) < 4 && it.x < 250 && it.tekst.startsWith('Robeco'));
-                if (fonds) fondsenJan[fonds.tekst] = bedrag;
-              } else if (sectie === 'dec' && x > 400) {
-                const fonds = items.find(it => Math.abs(it.y - y) < 4 && it.x < 250 && it.tekst.startsWith('Robeco'));
-                if (fonds) fondsenDec[fonds.tekst] = bedrag;
-              } else if (sectie === 'div' && Math.abs(x - 241) < 40) {
-                // Bruto dividend = eerste kolom; zoek fonds op zelfde of vorige y
-                for (const dy of [0, -10, -12, -14]) {
-                  const fonds = items.find(it => Math.abs(it.y - (y + dy)) < 6 && it.x < 200 && it.tekst.startsWith('Robeco'));
-                  if (fonds) { dividendenBruto[fonds.tekst] = bedrag; break; }
-                }
-              }
-            }
-          }
-        }
-
-        // Bouw posities
-        const alleNamen = new Set([...Object.keys(fondsenJan), ...Object.keys(fondsenDec)]);
-        const skip = new Set(['Fonds', 'Waarde', 'Totaalbeleggingen', 'Totaal', 'Spaartegoed']);
-        const posities = [];
-
-        for (const naam of [...alleNamen].sort()) {
-          if (skip.has(naam)) continue;
-          // Dividend koppelen via prefix-match
-          let div = 0;
-          for (const [dn, dv] of Object.entries(dividendenBruto)) {
-            if (naam.startsWith(dn.substring(0, Math.min(dn.length, 25))) ||
-                dn.startsWith(naam.substring(0, Math.min(naam.length, 25)))) {
-              div = dv; break;
-            }
-          }
-          posities.push({
-            naam: maakLeesbaar(naam),
-            naam_raw: naam,
-            type: 'fonds',
-            jan1_waarde: fondsenJan[naam] || 0,
-            dec31_waarde: fondsenDec[naam] || 0,
-            dividend: div,
-          });
-        }
-
-        resolve({
-          bank: 'Evi (Van Lanschot)',
-          type: 'evi',
-          jaar,
-          rekeningen: [{
-            naam: `Beleggingsrekening (${rekeningnummer})`,
-            weergave_naam: 'Beleggingsrekening',
-            type: 'beleggen',
-            rekeningnummer,
-            posities,
-          }]
-        });
-      } catch (err) { reject(err); }
-    };
-    reader.onerror = () => reject(new Error('Leesfout'));
-    reader.readAsArrayBuffer(file);
-  });
+  // Fallback: niet meer nodig, maar exporteren voor backwards compat
+  return null;
 }
