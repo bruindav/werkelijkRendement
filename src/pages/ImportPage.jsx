@@ -30,27 +30,24 @@ async function extractPDFText(file) {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
           
-          // Groepeer items per regel op basis van Y-positie
-          // Items op dezelfde Y worden samengevoegd met spatie (zoals pdfplumber doet)
-          const regels = [];
-          let huidigeRegel = [];
-          let huidigeY = null;
-          
+          // 2-pass Y-grouping: verzamel eerst ALLE items, groepeer dan op Y.
+          // pdf.js geeft items soms niet in regel-volgorde, dus we sorteren zelf.
+          // transform[5] = bottom-up Y coordinaat (hogere waarde = hoger op pagina)
+          const groepen = new Map();
           for (const item of content.items) {
             if (!item.str.trim()) continue;
             const y = Math.round(item.transform[5]);
-            if (huidigeY === null) huidigeY = y;
-            
-            if (Math.abs(y - huidigeY) > 3) {
-              // Nieuwe regel
-              if (huidigeRegel.length > 0) regels.push(huidigeRegel.join(' '));
-              huidigeRegel = [item.str];
-              huidigeY = y;
-            } else {
-              huidigeRegel.push(item.str);
-            }
+            const x = item.transform[4];
+            if (!groepen.has(y)) groepen.set(y, []);
+            groepen.get(y).push({ x, tekst: item.str });
           }
-          if (huidigeRegel.length > 0) regels.push(huidigeRegel.join(' '));
+          
+          // Sorteer Y-groepen: hoog y = hoog op pagina = eerste regel
+          const gesorteerdeY = [...groepen.keys()].sort((a, b) => b - a);
+          const regels = gesorteerdeY.map(y => {
+            const items = groepen.get(y).sort((a, b) => a.x - b.x);
+            return items.map(i => i.tekst).join(' ');
+          });
           
           fullText += regels.join('\n') + '\n';
         }
