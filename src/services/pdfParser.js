@@ -16,6 +16,7 @@ function parseBedrag(s) {
 
 // ============ BANK DETECTIE ============
 export function detectBankType(text) {
+  if (text.includes('Evi') && (text.includes('Van Lanschot') || text.includes('Fiscaal jaaroverzicht'))) return 'evi';
   if (text.includes('Centraal Beheer') || text.includes('RentePlús') || text.includes('RenteVast')) {
     if (text.includes('Beleggingsrekening') && text.includes('Waarde 1 januari')) return 'cb_beleggen';
     return 'centraal_beheer';
@@ -185,10 +186,14 @@ function parseAbnAmro(text) {
 
 // ============ HOOFD PARSE FUNCTIE ============
 export function parseerPDF(text) {
+  // Evi heeft speciale parser (positie-gebaseerd), wordt apart afgehandeld via parseEviPDF
+  // Als toch via text: geef hint terug
   const type = detectBankType(text);
 
   switch (type) {
     case 'centraal_beheer': return parseCentraalBeheer(text);
+    case 'evi':             return { bank: 'Evi (Van Lanschot)', type: 'evi', jaar: null, rekeningen: [],
+                                    _requiresEviParser: true };
     case 'cb_beleggen':     return parseCBBeleggen(text);
     case 'raisin':          return parseRaisin(text);
     case 'abn_amro':        return parseAbnAmro(text);
@@ -196,4 +201,137 @@ export function parseerPDF(text) {
       return { bank: 'Onbekend', jaar: null, rekeningen: [], type: 'onbekend',
                fout: 'Bank niet herkend. Ondersteund: Centraal Beheer, Raisin, ABN AMRO.' };
   }
+}
+
+// ============ EVI (VAN LANSCHOT) ============
+// Evi plakt woorden aaneeen in de PDF. We gebruiken positie-info van pdf.js
+// om fondsnamen (links) te koppelen aan bedragen (rechts).
+// pdf.js geeft ons via getTextContent() items met transform [sx,0,0,sy,tx,ty]
+// waarbij tx = x-positie en ty = y-positie.
+
+function maakLeesbaar(naam) {
+  // RobecoGlobalStarsEquitiesFund-EURG -> Robeco Global Stars Equities Fund - EUR G
+  let s = naam.replace(/([a-z])([A-Z])/g, '$1 $2');
+  s = s.replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2');
+  s = s.replace(/-/g, ' - ').replace(/  +/g, ' ').trim();
+  return s;
+}
+
+export async function parseEviPDF(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise;
+
+        let jaar = null;
+        let rekeningnummer = '';
+        const fondsenJan = {};
+        const fondsenDec = {};
+        const dividendenBruto = {};
+        let sectie = null;
+
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page = await pdf.getPage(p);
+          const content = await page.getTextContent();
+
+          // Bouw een lijst van woorden met x/y posities
+          const items = content.items.map(item => ({
+            tekst: item.str.trim(),
+            x: item.transform[4],
+            y: item.transform[5],
+          })).filter(i => i.tekst.length > 0);
+
+          for (let i = 0; i < items.length; i++) {
+            const { tekst, x, y } = items[i];
+
+            // Jaar detectie
+            const jaarM = tekst.match(/jaar(\d{4})/i);
+            if (jaarM && !jaar) jaar = parseInt(jaarM[1]);
+
+            // Rekeningnummer
+            if (!rekeningnummer && /^\d{6,}$/.test(tekst) && x > 200) {
+              rekeningnummer = tekst;
+            }
+
+            // Sectie wissels
+            if (tekst === 'Vermogen') {
+              const nxt2 = items[i + 2]?.tekst || '';
+              if (nxt2.includes('01-01')) sectie = 'jan';
+              else if (nxt2.includes('31-12')) sectie = 'dec';
+            }
+            if (tekst === 'Dividend') {
+              const nxt = items[i + 1]?.tekst?.toLowerCase() || '';
+              if (nxt.includes('binnen')) sectie = 'div';
+              else if (nxt.includes('buiten')) sectie = null;
+            }
+
+            // Bedrag detectie (x > 400 of ~241 voor dividend)
+            if (tekst.startsWith('€')) {
+              const bedrag = parseBedrag(tekst);
+
+              if (sectie === 'jan' && x > 400) {
+                // Zoek fondsNaam op zelfde y
+                const fonds = items.find(it => Math.abs(it.y - y) < 4 && it.x < 250 && it.tekst.startsWith('Robeco'));
+                if (fonds) fondsenJan[fonds.tekst] = bedrag;
+              } else if (sectie === 'dec' && x > 400) {
+                const fonds = items.find(it => Math.abs(it.y - y) < 4 && it.x < 250 && it.tekst.startsWith('Robeco'));
+                if (fonds) fondsenDec[fonds.tekst] = bedrag;
+              } else if (sectie === 'div' && Math.abs(x - 241) < 40) {
+                // Bruto dividend = eerste kolom; zoek fonds op zelfde of vorige y
+                for (const dy of [0, -10, -12, -14]) {
+                  const fonds = items.find(it => Math.abs(it.y - (y + dy)) < 6 && it.x < 200 && it.tekst.startsWith('Robeco'));
+                  if (fonds) { dividendenBruto[fonds.tekst] = bedrag; break; }
+                }
+              }
+            }
+          }
+        }
+
+        // Bouw posities
+        const alleNamen = new Set([...Object.keys(fondsenJan), ...Object.keys(fondsenDec)]);
+        const skip = new Set(['Fonds', 'Waarde', 'Totaalbeleggingen', 'Totaal', 'Spaartegoed']);
+        const posities = [];
+
+        for (const naam of [...alleNamen].sort()) {
+          if (skip.has(naam)) continue;
+          // Dividend koppelen via prefix-match
+          let div = 0;
+          for (const [dn, dv] of Object.entries(dividendenBruto)) {
+            if (naam.startsWith(dn.substring(0, Math.min(dn.length, 25))) ||
+                dn.startsWith(naam.substring(0, Math.min(naam.length, 25)))) {
+              div = dv; break;
+            }
+          }
+          posities.push({
+            naam: maakLeesbaar(naam),
+            naam_raw: naam,
+            type: 'fonds',
+            jan1_waarde: fondsenJan[naam] || 0,
+            dec31_waarde: fondsenDec[naam] || 0,
+            dividend: div,
+          });
+        }
+
+        resolve({
+          bank: 'Evi (Van Lanschot)',
+          type: 'evi',
+          jaar,
+          rekeningen: [{
+            naam: `Beleggingsrekening (${rekeningnummer})`,
+            weergave_naam: 'Beleggingsrekening',
+            type: 'beleggen',
+            rekeningnummer,
+            posities,
+          }]
+        });
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('Leesfout'));
+    reader.readAsArrayBuffer(file);
+  });
 }
