@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { parseerPDF, detectBankType, parseEviPDF } from '../services/pdfParser';
+import { parseerPDF, detectBankType } from '../services/pdfParser';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
 import { Upload, FileText, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Loader, X, ArrowRight } from 'lucide-react';
@@ -29,8 +29,30 @@ async function extractPDFText(file) {
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
-          const pageText = content.items.map(item => item.str).join('\n');
-          fullText += pageText + '\n';
+          
+          // Groepeer items per regel op basis van Y-positie
+          // Items op dezelfde Y worden samengevoegd met spatie (zoals pdfplumber doet)
+          const regels = [];
+          let huidigeRegel = [];
+          let huidigeY = null;
+          
+          for (const item of content.items) {
+            if (!item.str.trim()) continue;
+            const y = Math.round(item.transform[5]);
+            if (huidigeY === null) huidigeY = y;
+            
+            if (Math.abs(y - huidigeY) > 3) {
+              // Nieuwe regel
+              if (huidigeRegel.length > 0) regels.push(huidigeRegel.join(' '));
+              huidigeRegel = [item.str];
+              huidigeY = y;
+            } else {
+              huidigeRegel.push(item.str);
+            }
+          }
+          if (huidigeRegel.length > 0) regels.push(huidigeRegel.join(' '));
+          
+          fullText += regels.join('\n') + '\n';
         }
 
         resolve(fullText);
@@ -179,14 +201,8 @@ export default function ImportPage() {
       }
 
       const tekst = await extractPDFText(file);
-      let resultaat;
-
-      // Evi gebruikt een positie-gebaseerde parser (woorden zijn aaneengeplakt)
-      if (detectBankType(tekst) === 'evi') {
-        resultaat = await parseEviPDF(file);
-      } else {
-        resultaat = parseerPDF(tekst);
-      }
+      // parseerPDF herkent alle banken inclusief Evi (na Y-grouping werkt alles tekst-gebaseerd)
+      const resultaat = parseerPDF(tekst);
 
       if (resultaat.type === 'onbekend') {
         setFout(resultaat.fout || 'Bank niet herkend in dit PDF-bestand.');
