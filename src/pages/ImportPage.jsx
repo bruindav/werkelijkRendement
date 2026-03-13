@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { parseerPDF, detectBankType } from '../services/pdfParser';
+import { parseerPDF, detectBankType, parseEviPDF } from '../services/pdfParser';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
 import { Upload, FileText, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Loader, X, ArrowRight } from 'lucide-react';
@@ -76,7 +76,21 @@ function RekeningKaart({ rec, index, geselecteerd, onToggle }) {
             <span className={`text-xs px-2 py-0.5 rounded-full border ${typeKleur}`}>{rec.type}</span>
           </div>
 
-          {rec.type === 'beleggen' ? (
+          {rec.posities && rec.posities.length > 0 ? (
+            // Evi-stijl: toon individuele fondsen
+            <div className="mt-2 space-y-1">
+              {rec.posities.map((pos, pi) => (
+                <div key={pi} className="flex justify-between text-xs bg-slate-900/60 rounded-lg px-3 py-1.5">
+                  <span className="text-slate-300 truncate mr-4">{pos.naam}</span>
+                  <div className="flex gap-3 flex-shrink-0 text-right">
+                    <span className="text-slate-400">{fmt(pos.jan1_waarde)}</span>
+                    <span className="text-white">→ {fmt(pos.dec31_waarde)}</span>
+                    {pos.dividend > 0 && <span className="text-emerald-400">div {fmt(pos.dividend)}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : rec.type === 'beleggen' ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-xs">
               <div className="bg-slate-900/60 rounded-lg p-2">
                 <div className="text-slate-400 mb-0.5">1 jan</div>
@@ -165,7 +179,14 @@ export default function ImportPage() {
       }
 
       const tekst = await extractPDFText(file);
-      const resultaat = parseerPDF(tekst);
+      let resultaat;
+
+      // Evi gebruikt een positie-gebaseerde parser (woorden zijn aaneengeplakt)
+      if (detectBankType(tekst) === 'evi') {
+        resultaat = await parseEviPDF(file);
+      } else {
+        resultaat = parseerPDF(tekst);
+      }
 
       if (resultaat.type === 'onbekend') {
         setFout(resultaat.fout || 'Bank niet herkend in dit PDF-bestand.');
@@ -319,8 +340,30 @@ export default function ImportPage() {
       rekeningData
     );
 
-    if (rec.type === 'beleggen') {
-      // Voeg één positie toe met de totaalwaarden
+    if (rec.type === 'beleggen' && rec.posities && rec.posities.length > 0) {
+      // Evi-stijl: importeer elke positie (fonds) apart
+      for (const pos of rec.posities) {
+        await addDoc(
+          collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}/positions`),
+          {
+            naam: pos.naam,
+            type: 'fonds',
+            ticker: '',
+            isin: '',
+            jan1_waarde: pos.jan1_waarde || 0,
+            dec31_waarde: pos.dec31_waarde || 0,
+            jan1_aantal: 0, jan1_prijs: 0,
+            dec31_aantal: 0, dec31_prijs: 0,
+            aankopen: [],
+            verkopen: [],
+            dividend: pos.dividend || 0,
+            rente: 0,
+            kosten: 0,
+          }
+        );
+      }
+    } else if (rec.type === 'beleggen') {
+      // Standaard beleggen: één positie met totaalwaarden
       await addDoc(
         collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}/positions`),
         {
