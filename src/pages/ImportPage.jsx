@@ -346,7 +346,9 @@ export default function ImportPage() {
     const rekeningData = {
       naam: rec.weergave_naam || rec.naam,
       type: rec.type,
-      rekeningnummer: rec.rekeningnummer || rec.iban || rec.kenmerk || '',
+      rekeningnummer: rec.rekeningnummer || rec.iban || '',
+      kenmerk: rec.kenmerk || '',
+      ...(rec.dividend_totaal ? { notitie: `Bruto dividend totaal: €${rec.dividend_totaal}` } : {}),
     };
     const rekRef = await addDoc(
       collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts`),
@@ -359,10 +361,18 @@ export default function ImportPage() {
         await addDoc(
           collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}/positions`),
           {
-            naam: pos.naam, type: 'fonds', ticker: '', isin: '',
-            jan1_waarde: pos.jan1_waarde || 0, dec31_waarde: pos.dec31_waarde || 0,
-            jan1_aantal: 0, jan1_prijs: 0, dec31_aantal: 0, dec31_prijs: 0,
-            aankopen: [], verkopen: [], dividend: pos.dividend || 0, rente: 0, kosten: 0,
+            naam: pos.naam,
+            type: pos.type || 'aandeel',
+            ticker: '',
+            isin: pos.isin || '',
+            jan1_waarde: pos.jan1_waarde || 0,
+            dec31_waarde: pos.dec31_waarde || 0,
+            jan1_aantal: pos.jan1_aantal || 0,
+            jan1_prijs: pos.jan1_prijs || 0,
+            dec31_aantal: pos.dec31_aantal || 0,
+            dec31_prijs: pos.dec31_prijs || 0,
+            aankopen: [], verkopen: [],
+            dividend: pos.dividend || 0, rente: 0, kosten: 0,
           }
         );
       }
@@ -391,9 +401,9 @@ export default function ImportPage() {
           ontvangen_rente: rec.ontvangen_rente || 0,
           rente_pct: rec.rente_pct || 0,
           kosten: rec.kosten || 0,
-          notitie: rec.notitie || (rec.iban ? `IBAN: ${rec.iban}` : ''),
+          notitie: rec.notitie || '',
+          kenmerk: rec.kenmerk || '',
           ...(rec.looptijd_maanden ? { looptijd_maanden: rec.looptijd_maanden } : {}),
-          ...(rec.kenmerk ? { kenmerk: rec.kenmerk } : {}),
           ...(rec.land ? { land: rec.land } : {}),
         }
       );
