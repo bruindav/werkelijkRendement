@@ -371,7 +371,10 @@ export default function ImportPage() {
             jan1_prijs: pos.jan1_prijs || 0,
             dec31_aantal: pos.dec31_aantal || 0,
             dec31_prijs: pos.dec31_prijs || 0,
-            aankopen: [], verkopen: [],
+            aankopen: pos.aankopen_totaal > 0
+              ? [{ datum: `${jaar}-01-01`, aantal: 0, prijs: 0, totaal: pos.aankopen_totaal }] : [],
+            verkopen: pos.verkopen_totaal > 0
+              ? [{ datum: `${jaar}-12-31`, aantal: 0, prijs: 0, totaal: pos.verkopen_totaal }] : [],
             dividend: pos.dividend || 0, rente: 0, kosten: 0,
           }
         );
