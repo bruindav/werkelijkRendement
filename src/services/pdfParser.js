@@ -18,6 +18,8 @@ function maakLeesbaar(naam) {
 
 // ============ BANK DETECTIE ============
 export function detectBankType(text) {
+  if (text.includes('Meewind') || text.includes('Zeewind') || text.includes('MW0')) return 'meewind';
+  if (text.includes('Beleggingsrekening') && text.includes('Centraal Beheer') && text.includes('totaal beleggingen')) return 'cb_beleggen_nieuw';
   if (text.includes('DEGIRO') && text.includes('Portefeuilleoverzicht')) return 'degiro';
   if (text.includes('Collin Crowdfund') || text.includes('JAAROPGAVE') && text.includes('Portefeuillewaarde')) return 'collin';
   if (text.includes('Evi') && text.includes('Van Lanschot')) return 'evi';
@@ -265,9 +267,11 @@ export function parseerPDF(text) {
     case 'evi':             return parseEviTekst(text);
     case 'degiro':          return parseDegiro(text);
     case 'collin':          return parseCollin(text);
+    case 'meewind':         return parseMeewind(text);
+    case 'cb_beleggen_nieuw': return parseCBBeleggenNieuw(text);
     default:
       return { bank: 'Onbekend', jaar: null, rekeningen: [], type: 'onbekend',
-               fout: 'Bank niet herkend. Ondersteund: Centraal Beheer, Raisin, ABN AMRO, Evi, DEGIRO, Collin.' };
+               fout: 'Bank niet herkend. Ondersteund: Centraal Beheer, Raisin, ABN AMRO, Evi, DEGIRO, Collin, Meewind.' };
   }
 }
 
@@ -405,6 +409,126 @@ function parseCollin(text) {
         dec31_aantal: 0, dec31_prijs: 0,
         dividend: renteM ? parseBedrag(renteM[1]) : 0,
       }]
+    }]
+  };
+}
+
+
+// ============ CENTRAAL BEHEER BELEGGEN (nieuw formaat - totaalwaarden) ============
+function parseCBBeleggenNieuw(text) {
+  const jaarMatch = text.match(/jaaroverzicht (\d{4})/i);
+  const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
+
+  const rekMatch = text.match(/Rekeningnummer:\s*(NL[\d\s A-Z]+?)(?:\n|Op naam)/);
+  const rekeningnummer = rekMatch ? rekMatch[1].trim() : '';
+
+  // Twee "Waarde 01-01-YYYY totaal beleggingen" regels: eerste = jan, tweede = dec (volgend jaar)
+  const waarden = [...text.matchAll(/Waarde 01-01-\d{4} totaal beleggingen\s+€\s*([\d.,]+)/g)]
+    .map(m => parseBedrag(m[1]));
+
+  const divMatch = text.match(/Bruto uitgekeerd dividend\s+€\s*([\d.,]+)/);
+
+  return {
+    bank: 'Centraal Beheer',
+    type: 'cb_beleggen_nieuw',
+    jaar,
+    rekeningen: [{
+      naam: `Beleggingsrekening (${rekeningnummer})`,
+      weergave_naam: 'Beleggingsrekening',
+      type: 'beleggen',
+      rekeningnummer,
+      posities: [{
+        naam: 'Beleggingsrekening totaal',
+        isin: '', type: 'fonds',
+        jan1_waarde: waarden[0] || 0,
+        jan1_aantal: 0, jan1_prijs: 0,
+        dec31_waarde: waarden[1] || 0,
+        dec31_aantal: 0, dec31_prijs: 0,
+        dividend: divMatch ? parseBedrag(divMatch[1]) : 0,
+      }]
+    }]
+  };
+}
+
+// ============ MEEWIND ============
+function parseMeewind(text) {
+  const datumMatch = text.match(/per 31-12-(\d{4})/);
+  const jaar = datumMatch ? parseInt(datumMatch[1]) : null;
+
+  const rekMatch = text.match(/(MW\d+)/);
+  const rekeningnummer = rekMatch ? rekMatch[1] : '';
+
+  const totaalJan = text.match(/Totaal vermogen per 01-01-\d{4}\s+€\s*([\d.,]+)/);
+  const totaalDec = text.match(/Totaal vermogen per 31-12-\d{4}\s+€\s*([\d.,]+)/);
+
+  // Per fonds: "Naam Aantal € Koers € Waarde" — twee keer (jan en dec)
+  const fondsRegel = /^([A-Z][A-Za-z ]+?)\s+([\d,]+)\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)$/gm;
+  const allFondsen = [...text.matchAll(fondsRegel)].map(m => ({
+    naam: m[1].trim(),
+    aantal: parseFloat(m[2].replace(',', '.')),
+    koers: parseBedrag(m[3]),
+    waarde: parseBedrag(m[4]),
+  }));
+
+  // Fondsen komen 2x voor: eerste helft = jan, tweede helft = dec
+  // Splits op basis van Totaal vermogen per 01-01 vs 31-12
+  const janBlok = text.match(/Totaal vermogen per 01-01[\s\S]+?(?=Totaal vermogen per 31-12)/)?.[0] || '';
+  const decBlok = text.match(/Totaal vermogen per 31-12[\s\S]+?(?=Uitkeringen|Bruto|$)/)?.[0] || '';
+
+  const parseFondsBlok = (blok) => {
+    const posities = [];
+    const re = /^([A-Z][A-Za-z ]+?)\s+([\d,]+)\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)$/gm;
+    for (const m of blok.matchAll(re)) {
+      posities.push({
+        naam: m[1].trim(),
+        aantal: parseFloat(m[2].replace(',', '.')),
+        koers: parseBedrag(m[3]),
+        waarde: parseBedrag(m[4]),
+      });
+    }
+    return posities;
+  };
+
+  const janFondsen = parseFondsBlok(janBlok);
+  const decFondsen = parseFondsBlok(decBlok);
+
+  // Bouw posities door jan en dec te koppelen op naam
+  const decMap = new Map(decFondsen.map(f => [f.naam, f]));
+  const posities = janFondsen.map(jan => {
+    const dec = decMap.get(jan.naam) || {};
+    return {
+      naam: jan.naam,
+      isin: '', type: 'fonds',
+      jan1_waarde: jan.waarde, jan1_aantal: jan.aantal, jan1_prijs: jan.koers,
+      dec31_waarde: dec.waarde || 0, dec31_aantal: dec.aantal || 0, dec31_prijs: dec.koers || 0,
+      dividend: 0,
+    };
+  });
+  // Fondsen alleen in dec
+  for (const [naam, dec] of decMap) {
+    if (!janFondsen.find(f => f.naam === naam)) {
+      posities.push({
+        naam, isin: '', type: 'fonds',
+        jan1_waarde: 0, jan1_aantal: 0, jan1_prijs: 0,
+        dec31_waarde: dec.waarde, dec31_aantal: dec.aantal, dec31_prijs: dec.koers,
+        dividend: 0,
+      });
+    }
+  }
+
+  const divMatch = text.match(/Bruto dividenduitkering:\s+€\s*([\d.,]+)/);
+
+  return {
+    bank: 'Meewind',
+    type: 'meewind',
+    jaar,
+    rekeningen: [{
+      naam: `Meewind portefeuille (${rekeningnummer})`,
+      weergave_naam: 'Meewind portefeuille',
+      type: 'beleggen',
+      rekeningnummer,
+      dividend_totaal: divMatch ? parseBedrag(divMatch[1]) : 0,
+      posities,
     }]
   };
 }
