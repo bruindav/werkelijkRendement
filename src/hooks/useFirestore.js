@@ -129,6 +129,8 @@ export async function kopieerJaar(uid, vanJaar, naarJaar) {
             verkopen: [],
             dividend: 0,
             rente: 0,
+            // maandelijks_bedrag blijft behouden voor volgend jaar
+            maandelijks_bedrag: pos.maandelijks_bedrag || 0,
           }
         );
       }
