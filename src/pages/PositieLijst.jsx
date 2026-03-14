@@ -10,7 +10,7 @@ import { usePosities, useBank, useRekening } from '../hooks/useFirestore';
 import Breadcrumb from '../components/Breadcrumb';
 import { berekenPositieRendement, formatEuro, formatPct } from '../services/berekening';
 import { zoekAandeel, haalKoersenVoorJaar } from '../services/koersApi';
-import { Plus, Trash2, ChevronDown, ChevronUp, Search, TrendingUp, Edit3, Check, X, Loader, Calendar } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Search, TrendingUp, Edit3, Check, X, Loader, Calendar, Repeat } from 'lucide-react';
 
 const TYPES = ['aandeel', 'obligatie', 'etf', 'anders'];
 
