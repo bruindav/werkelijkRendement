@@ -18,6 +18,8 @@ function maakLeesbaar(naam) {
 
 // ============ BANK DETECTIE ============
 export function detectBankType(text) {
+  if (text.includes('DEGIRO') && text.includes('Portefeuilleoverzicht')) return 'degiro';
+  if (text.includes('Collin Crowdfund') || text.includes('JAAROPGAVE') && text.includes('Portefeuillewaarde')) return 'collin';
   if (text.includes('Evi') && text.includes('Van Lanschot')) return 'evi';
   if (text.includes('Fiscaal jaaroverzicht') && text.includes('Vermogen per')) return 'evi';
   if (text.includes('Centraal Beheer') || text.includes('RentePlús') || text.includes('RenteVast')) {
@@ -261,9 +263,11 @@ export function parseerPDF(text) {
     case 'raisin':          return parseRaisin(text);
     case 'abn_amro':        return parseAbnAmro(text);
     case 'evi':             return parseEviTekst(text);
+    case 'degiro':          return parseDegiro(text);
+    case 'collin':          return parseCollin(text);
     default:
       return { bank: 'Onbekend', jaar: null, rekeningen: [], type: 'onbekend',
-               fout: 'Bank niet herkend. Ondersteund: Centraal Beheer, Raisin, ABN AMRO, Evi.' };
+               fout: 'Bank niet herkend. Ondersteund: Centraal Beheer, Raisin, ABN AMRO, Evi, DEGIRO, Collin.' };
   }
 }
 
@@ -271,4 +275,136 @@ export function parseerPDF(text) {
 export async function parseEviPDF(file) {
   // Fallback: niet meer nodig, maar exporteren voor backwards compat
   return null;
+}
+
+// ============ DEGIRO ============
+function parseDegiro(text) {
+  const jaarMatch = text.match(/jaaroverzicht (\d{4})/i);
+  const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
+  const accountMatch = text.match(/Account:\s*(\S+)/);
+  const account = accountMatch ? accountMatch[1] : '';
+
+  // Dividend totaal bruto
+  const divMatch = text.match(/Totaal\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/);
+  const divBruto = divMatch ? parseBedrag(divMatch[1]) : 0;
+
+  function parseBlok(label, eindLabel) {
+    const pat = new RegExp(
+      label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+      '([\\s\\S]+?)' +
+      (eindLabel ? eindLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : 'Totale portefeuillewaarde'),
+      ''
+    );
+    const blokMatch = text.match(pat);
+    if (!blokMatch) return [];
+
+    const posities = [];
+    for (const line of blokMatch[1].split('\n')) {
+      const l = line.trim();
+
+      // Cash regel
+      const cashM = l.match(/^(CASH[^€\d]+?)\s+Valuta\s+([\d.,]+)$/);
+      if (cashM) {
+        posities.push({ naam: 'Cash & Cash Fund', isin: '', type: 'valuta',
+          aantal: 0, koers: 0, waarde_eur: parseBedrag(cashM[2]) });
+        continue;
+      }
+      // Positie met ISIN
+      const posM = l.match(
+        /^(.+?)\s+([A-Z]{2}[A-Z0-9]{10})\s+(Aandeel|ETF|Obligatie|Fonds)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+(?:EUR|USD|GBP)\s+([\d.,]+)$/
+      );
+      if (posM) {
+        const [, naam, isin, ptype, aantal, koers, , waarde_eur] = posM;
+        posities.push({ naam: naam.trim(), isin, type: ptype.toLowerCase(),
+          aantal: parseInt(aantal), koers: parseBedrag(koers), waarde_eur: parseBedrag(waarde_eur) });
+      }
+    }
+    return posities;
+  }
+
+  const janPosties = parseBlok('Portefeuilleoverzicht per 1-1-', 'Portefeuilleoverzicht per 31-12-');
+  const decPosties = parseBlok('Portefeuilleoverzicht per 31-12-', null);
+
+  // Koppel jan en dec op ISIN/naam, bouw posities
+  const posities = [];
+  const decMap = new Map(decPosties.map(p => [p.isin || p.naam, p]));
+
+  for (const jan of janPosties) {
+    const dec = decMap.get(jan.isin || jan.naam) || {};
+    // Dividend per positie: niet beschikbaar per aandeel in DEGIRO PDF,
+    // verdeeld over totaal — Cash positie krijgt 0
+    posities.push({
+      naam: jan.naam,
+      isin: jan.isin,
+      type: jan.isin ? (jan.type === 'etf' ? 'etf' : jan.type === 'obligatie' ? 'obligatie' : 'aandeel') : 'overig',
+      jan1_waarde: jan.waarde_eur,
+      jan1_aantal: jan.aantal,
+      jan1_prijs: jan.koers,
+      dec31_waarde: dec.waarde_eur || 0,
+      dec31_aantal: dec.aantal || 0,
+      dec31_prijs: dec.koers || 0,
+      dividend: 0, // totaal dividend staat apart, niet per aandeel
+    });
+    decMap.delete(jan.isin || jan.naam);
+  }
+  // Posities die alleen in dec staan (nieuw gekocht)
+  for (const dec of decMap.values()) {
+    posities.push({
+      naam: dec.naam, isin: dec.isin,
+      type: dec.isin ? (dec.type === 'etf' ? 'etf' : dec.type === 'obligatie' ? 'obligatie' : 'aandeel') : 'overig',
+      jan1_waarde: 0, jan1_aantal: 0, jan1_prijs: 0,
+      dec31_waarde: dec.waarde_eur, dec31_aantal: dec.aantal, dec31_prijs: dec.koers,
+      dividend: 0,
+    });
+  }
+
+  return {
+    bank: 'DEGIRO',
+    type: 'degiro',
+    jaar,
+    rekeningen: [{
+      naam: `Beleggingsrekening (${account})`,
+      weergave_naam: 'Beleggingsrekening',
+      type: 'beleggen',
+      rekeningnummer: account,
+      dividend_totaal: divBruto, // bruto dividend totaal op rekening-niveau
+      posities,
+    }]
+  };
+}
+
+// ============ COLLIN CROWDFUND ============
+function parseCollin(text) {
+  const jaarMatch = text.match(/JAAROPGAVE (\d{4})/i);
+  const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
+  const rekMatch = text.match(/courant nummer:\s*(\d+)/i);
+  const rekeningnummer = rekMatch ? rekMatch[1] : '';
+
+  // Portefeuillewaarden (jan = 1-1-jaar sectie, dec = 31-12-jaar sectie)
+  const janM = text.match(/1-1-\d{4}\s*\n[\s\S]+?Portefeuillewaarde\s+€\s*([\d.,]+)/);
+  const decM = text.match(/31-12-\d{4}\s*\n[\s\S]+?Portefeuillewaarde\s+€\s*([\d.,]+)/);
+
+  const renteM = text.match(/Ontvangen rente\s+€\s*([\d.,]+)/);
+
+  return {
+    bank: 'Collin Crowdfund',
+    type: 'collin',
+    jaar,
+    rekeningen: [{
+      naam: `Crowdfundportefeuille (${rekeningnummer})`,
+      weergave_naam: 'Crowdfundportefeuille',
+      type: 'beleggen',
+      rekeningnummer,
+      posities: [{
+        naam: 'Collin Crowdfund portefeuille',
+        isin: '',
+        type: 'overig',
+        jan1_waarde: janM ? parseBedrag(janM[1]) : 0,
+        jan1_aantal: 0, jan1_prijs: 0,
+        dec31_waarde: decM ? parseBedrag(decM[1]) : 0,
+        dec31_aantal: 0, dec31_prijs: 0,
+        dividend: renteM ? parseBedrag(renteM[1]) : 0,
+      }]
+    }]
+  };
 }
