@@ -16,6 +16,7 @@ const typeInfo = (type) => REKENING_TYPES.find(t => t.value === type) || REKENIN
 
 function RekeningForm({ onSave, onCancel, initial = {} }) {
   const [naam, setNaam] = useState(initial.naam || '');
+  const [rekeningnummer, setRekeningnummer] = useState(initial.rekeningnummer || '');
   const [type, setType] = useState(initial.type || 'beleggen');
   const [kosten, setKosten] = useState(initial.kosten || '');
 
@@ -46,16 +47,19 @@ function RekeningForm({ onSave, onCancel, initial = {} }) {
           <input autoFocus value={naam} onChange={e => setNaam(e.target.value)}
             placeholder={`bijv. ${typeInfo(type).label} ING`}
             className="w-full bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onKeyDown={e => e.key === 'Enter' && naam && onSave({ naam, type, kosten: parseFloat(kosten) || 0 })} />
+            onKeyDown={e => e.key === 'Enter' && naam && onSave({ naam, rekeningnummer, type, kosten: parseFloat(kosten) || 0 })} />
         </div>
         <div className="w-full sm:w-36">
           <label className="block text-xs text-slate-400 mb-1">Kosten (€) <span className="text-slate-500">aftrekbaar</span></label>
+          <input value={rekeningnummer} onChange={e => setRekeningnummer(e.target.value)}
+            placeholder="Rekeningnummer / IBAN (optioneel)"
+            className="w-full sm:w-auto flex-1 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <input type="number" step="0.01" value={kosten} onChange={e => setKosten(e.target.value)}
             placeholder="0.00"
             className="w-full bg-slate-800 border border-red-900/40 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
         </div>
         <div className="flex gap-2 mt-5">
-          <button onClick={() => naam && onSave({ naam, type, kosten: parseFloat(kosten) || 0 })} disabled={!naam}
+          <button onClick={() => naam && onSave({ naam, rekeningnummer, type, kosten: parseFloat(kosten) || 0 })} disabled={!naam}
             className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-lg px-3 py-2">
             <Check className="w-4 h-4" />
           </button>
@@ -99,13 +103,21 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder }) {
         <div>
           <div className="flex items-center gap-2">
             <p className="font-semibold text-white">{rek.naam}</p>
+            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+              {rek.rekeningnummer && (
+                <span className="text-xs text-slate-500 font-mono">{rek.rekeningnummer}</span>
+              )}
+              {rek.kosten > 0 && (
+                <span className="text-xs text-red-400/70">kosten: € {rek.kosten}</span>
+              )}
+            </div>
             <span className={`text-xs px-2 py-0.5 rounded-full bg-${info.kleur}-900/40 text-${info.kleur}-400`}>
               {info.label}
             </span>
           </div>
           <p className="text-sm text-slate-500 mt-0.5">
-            {rek.type === 'beleggen' ? 'Klik om posities te beheren' :
-             rek.type === 'deposito' ? 'Klik om deposito te beheren' : 'Klik om spaargeld te beheren'}
+            {rek.type === 'beleggen' ? 'Beleggingsrekening – klik voor posities' :
+             rek.type === 'deposito' ? 'Depositorekening – klik voor details' : 'Spaarrekening – klik voor details'}
             {rek.kosten > 0 && <span className="ml-2 text-red-400">· Kosten: -{formatEuro(rek.kosten)}</span>}
           </p>
         </div>

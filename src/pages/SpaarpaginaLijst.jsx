@@ -64,6 +64,7 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
   const isDeposito = rekeningType === 'deposito';
   const [form, setForm] = useState({
     rente_pct:          initial.rente_pct || '',
+    startbedrag:        initial.startbedrag || '',
     jan1_saldo:         initial.jan1_saldo || '',
     dec31_saldo:        initial.dec31_saldo || '',
     deposito_startdatum: initial.deposito_startdatum || '',
@@ -91,9 +92,11 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
   };
 
   // Berekening voor deposito eindbedrag
+  // Gebruik startbedrag als basis als die ingevuld is, anders jan1_saldo
+  const depositoBasis = parseFloat(form.startbedrag) || parseFloat(form.jan1_saldo);
   const depositoCalc = isDeposito
     ? berekenDepositoEindbedrag(
-        parseFloat(form.jan1_saldo),
+        depositoBasis,
         parseFloat(form.rente_pct),
         form.deposito_startdatum,
         form.deposito_einddatum,
@@ -112,6 +115,7 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
   const handleSave = () => {
     onSave({
       rente_pct:           parseFloat(form.rente_pct) || 0,
+      startbedrag:         parseFloat(form.startbedrag) || 0,
       jan1_saldo:          parseFloat(form.jan1_saldo) || 0,
       dec31_saldo:         parseFloat(form.dec31_saldo) || 0,
       deposito_startdatum: form.deposito_startdatum || null,
@@ -145,13 +149,23 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
         </div>
       </div>
 
-      {/* Deposito datums */}
+      {/* Deposito datums + startbedrag */}
       {isDeposito && (
         <div>
           <p className="text-sm font-medium text-slate-300 mb-3">🔒 Looptijd deposito</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {inp('Startdatum', 'deposito_startdatum', { type: 'date' })}
             {inp('Einddatum', 'deposito_einddatum', { type: 'date' })}
+          </div>
+          <div className="mt-3">
+            <label className="block text-xs text-slate-400 mb-1">
+              Startbedrag / inleg (€)
+              <span className="ml-1 text-slate-500">— basis voor eindbedrag berekening</span>
+            </label>
+            <input type="number" step="0.01" value={form.startbedrag}
+              onChange={e => set('startbedrag', e.target.value)}
+              placeholder={form.jan1_saldo ? `Leeg = gebruik saldo 1 jan (${form.jan1_saldo})` : 'bijv. 5000'}
+              className="w-full sm:w-64 bg-slate-700 border border-amber-700/40 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
           </div>
         </div>
       )}
@@ -210,8 +224,8 @@ function SpaarForm({ onSave, onCancel, initial = {}, rekeningType, year }) {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <div>
-              <p className="text-xs text-slate-500">Inleg</p>
-              <p className="text-white font-medium">{formatEuro(form.jan1_saldo)}</p>
+              <p className="text-xs text-slate-500">Inleg / startbedrag</p>
+              <p className="text-white font-medium">{formatEuro(parseFloat(form.startbedrag) || parseFloat(form.jan1_saldo) || 0)}</p>
             </div>
             <div>
               <p className="text-xs text-slate-500">Totale rente</p>
@@ -262,9 +276,10 @@ function SpaarKaart({ spaar, rekeningType, year, onUpdate, onVerwijder }) {
     ? Math.ceil((new Date(spaar.deposito_einddatum) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
 
+  const depositoBasis = spaar.startbedrag || spaar.jan1_saldo;
   const depositoCalc = isDeposito
     ? berekenDepositoEindbedrag(
-        spaar.jan1_saldo,
+        depositoBasis,
         spaar.rente_pct,
         spaar.deposito_startdatum,
         spaar.deposito_einddatum,

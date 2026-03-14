@@ -58,15 +58,33 @@ export default function Dashboard() {
           collection(db, `users/${user.uid}/years/${selectedYear}/banks/${bank.id}/accounts`)
         );
         for (const rek of rekeningenSnap.docs) {
-          const positiesSnap = await getDocs(
-            collection(db, `users/${user.uid}/years/${selectedYear}/banks/${bank.id}/accounts/${rek.id}/positions`)
-          );
-          for (const pos of positiesSnap.docs) {
-            const r = berekenPositieRendement(pos.data());
-            totaalRendement += r.totaalRendement;
-            totaalVermogenJan1 += r.waardeJan1;
-            totaalVermogenDec31 += r.waardeDec31;
-            aantalPosities++;
+          const rekData = rek.data();
+
+          if (rekData.type === 'beleggen') {
+            // Beleggingsrekening: posities optellen
+            const positiesSnap = await getDocs(
+              collection(db, `users/${user.uid}/years/${selectedYear}/banks/${bank.id}/accounts/${rek.id}/positions`)
+            );
+            for (const pos of positiesSnap.docs) {
+              const r = berekenPositieRendement(pos.data());
+              totaalRendement += r.totaalRendement;
+              totaalVermogenJan1 += r.waardeJan1;
+              totaalVermogenDec31 += r.waardeDec31;
+              aantalPosities++;
+            }
+          } else {
+            // Spaar- of depositorekening: spaargelden optellen
+            const spaarSnap = await getDocs(
+              collection(db, `users/${user.uid}/years/${selectedYear}/banks/${bank.id}/accounts/${rek.id}/spaargelden`)
+            );
+            for (const sp of spaarSnap.docs) {
+              const s = sp.data();
+              const rente = (s.ontvangen_rente || 0) - (s.kosten || 0);
+              totaalRendement += rente;
+              totaalVermogenJan1 += s.jan1_saldo || 0;
+              totaalVermogenDec31 += s.dec31_saldo || 0;
+              aantalPosities++;
+            }
           }
         }
       }
