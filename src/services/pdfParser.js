@@ -393,33 +393,70 @@ function parseCollin(text) {
   const rekMatch = text.match(/courant nummer:\s*(\d+)/i);
   const rekeningnummer = rekMatch ? rekMatch[1] : '';
 
-  // Portefeuillewaarden (jan = 1-1-jaar sectie, dec = 31-12-jaar sectie)
-  const janM = text.match(/1-1-\d{4}\s*\n[\s\S]+?Portefeuillewaarde\s+€\s*([\d.,]+)/);
-  const decM = text.match(/31-12-\d{4}\s*\n[\s\S]+?Portefeuillewaarde\s+€\s*([\d.,]+)/);
+  // ---- 1. Rekening Courant (spaarrekening) ----
+  const rcJanM  = text.match(/Stand 1-1-\d{4}\s+€\s*([\d.,]+)/);
+  const rcDecM  = text.match(/Stand 31-12-\d{4}\s+€\s*([\d.,]+)/);
+  const renteM  = text.match(/Ontvangen rente\s+€\s*([\d.,]+)/);
 
-  const renteM = text.match(/Ontvangen rente\s+€\s*([\d.,]+)/);
+  const rcJan  = rcJanM  ? parseBedrag(rcJanM[1])  : 0;
+  const rcDec  = rcDecM  ? parseBedrag(rcDecM[1])  : 0;
+  const rente  = renteM  ? parseBedrag(renteM[1])  : 0;
 
-  return {
-    bank: 'Collin Crowdfund',
-    type: 'collin',
-    jaar,
-    rekeningen: [{
-      naam: `Crowdfundportefeuille (${rekeningnummer})`,
-      weergave_naam: 'Crowdfundportefeuille',
-      type: 'beleggen',
+  // ---- 2. Investeringsportefeuille (beleggingsrekening) ----
+  const invBlok = text.match(/Investeringsportefeuille([\s\S]+?)(?:Toelichting|$)/);
+  const blok = invBlok ? invBlok[1] : '';
+
+  const janWaardeM  = blok.match(/1-1-\d{4}[\s\S]+?Portefeuillewaarde\s+€\s*([\d.,]+)/);
+  const decWaardeM  = blok.match(/31-12-\d{4}[\s\S]+?Portefeuillewaarde\s+€\s*([\d.,]+)/);
+  const aankopenM   = blok.match(/Ge[ïi]nvesteerd \+ ingeschreven\s+€\s*([\d.,]+)/);
+  const afgelostM   = blok.match(/Afgelost\s+€\s*-?([\d.,]+)/);
+  const afgeboektM  = blok.match(/Afgeboekt\s+€\s*-?([\d.,]+)/);
+
+  const janWaarde = janWaardeM ? parseBedrag(janWaardeM[1]) : 0;
+  const decWaarde = decWaardeM ? parseBedrag(decWaardeM[1]) : 0;
+  const aankopen  = aankopenM  ? parseBedrag(aankopenM[1])  : 0;
+  const afgelost  = afgelostM  ? parseBedrag(afgelostM[1])  : 0;
+  const afgeboekt = afgeboektM ? parseBedrag(afgeboektM[1]) : 0;
+  const verkopen  = afgelost + afgeboekt;
+
+  const rekeningen = [];
+
+  // Rekening courant alleen toevoegen als er saldo is
+  if (rcJan > 0 || rcDec > 0 || rente > 0) {
+    rekeningen.push({
+      naam: `Rekening Courant (${rekeningnummer})`,
+      weergave_naam: 'Rekening Courant',
+      type: 'sparen',
       rekeningnummer,
-      posities: [{
-        naam: 'Collin Crowdfund portefeuille',
-        isin: '',
-        type: 'overig',
-        jan1_waarde: janM ? parseBedrag(janM[1]) : 0,
-        jan1_aantal: 0, jan1_prijs: 0,
-        dec31_waarde: decM ? parseBedrag(decM[1]) : 0,
-        dec31_aantal: 0, dec31_prijs: 0,
-        dividend: renteM ? parseBedrag(renteM[1]) : 0,
-      }]
+      jan1_saldo: rcJan,
+      dec31_saldo: rcDec,
+      ontvangen_rente: rente,
+      rente_pct: 0,
+      kosten: 0,
+      notitie: 'Collin Crowdfund rekening-courant',
+    });
+  }
+
+  // Investeringsportefeuille
+  rekeningen.push({
+    naam: `Investeringsportefeuille (${rekeningnummer})`,
+    weergave_naam: 'Investeringsportefeuille',
+    type: 'beleggen',
+    rekeningnummer,
+    posities: [{
+      naam: 'Collin Crowdfund leningen',
+      isin: '', type: 'overig',
+      jan1_waarde: janWaarde,
+      jan1_aantal: 0, jan1_prijs: 0,
+      dec31_waarde: decWaarde,
+      dec31_aantal: 0, dec31_prijs: 0,
+      aankopen_totaal: aankopen,
+      verkopen_totaal: verkopen,
+      dividend: rente,
     }]
-  };
+  });
+
+  return { bank: 'Collin Crowdfund', type: 'collin', jaar, rekeningen };
 }
 
 
