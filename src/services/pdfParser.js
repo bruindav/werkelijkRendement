@@ -193,13 +193,16 @@ function parseEviTekst(text) {
   const parseSecieFondsen = (blok, target) => {
     if (!blok) return;
     for (const line of blok.split('\n')) {
-      // Patroon: "FondsNaamAaneengeplakt €1.234,56"
-      const m = line.match(/^([A-Z][A-Za-z0-9\-]+)\s+€([\d.,]+)$/);
+      // Patroon: naam (met of zonder spaties) gevolgd door €bedrag
+      // Werkt voor zowel "Robeco Global Stars F EUR € 1.349,57" als "RobecoONENeutraal €8.336,31"
+      const m = line.match(/^([A-Z][A-Za-z0-9 \-]+?)\s+€\s*([\d.,]+)$/);
       if (m) {
         const naam = m[1].trim();
-        const skip = new Set(['Totaalbeleggingen', 'Totaal', 'Spaartegoed', 'Fonds']);
-        if (!skip.has(naam)) {
-          target[naam] = parseBedrag(m[2]);
+        const skip = new Set(['Totaalbeleggingen', 'Totaal beleggingen', 'Totaal', 'Spaartegoed', 'Fonds', 'Waarde']);
+        if (!skip.has(naam) && !naam.toLowerCase().startsWith('totaal')) {
+          // maakLeesbaar: alleen nodig als naam aaneengeplakt is (geen spaties)
+          const leesbaar = naam.includes(' ') ? naam : maakLeesbaar(naam);
+          target[leesbaar] = parseBedrag(m[2]);
         }
       }
     }
@@ -208,12 +211,16 @@ function parseEviTekst(text) {
   parseSecieFondsen(janMatch?.[1], fondsenJan);
   parseSecieFondsen(decMatch?.[1], fondsenDec);
 
-  // Dividenden: "FondsNaam €17,36 €2,60 €14,76"
+  // Dividenden: "FondsNaam €17,36 €2,60 €14,76" (naam kan spaties bevatten)
   if (divMatch) {
     for (const line of divMatch[1].split('\n')) {
-      const m = line.match(/^([A-Z][A-Za-z0-9\-]+)\s+€([\d.,]+)\s+€([\d.,]+)\s+€([\d.,]+)/);
-      if (m && m[1] !== 'Totaal') {
-        dividendenBruto[m[1]] = parseBedrag(m[2]); // bruto dividend
+      const m = line.match(/^([A-Z][A-Za-z0-9 \-]+?)\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)/);
+      if (m) {
+        const naam = m[1].trim();
+        if (naam !== 'Totaal' && naam !== 'Bruto dividend') {
+          const leesbaar = naam.includes(' ') ? naam : maakLeesbaar(naam);
+          dividendenBruto[leesbaar] = parseBedrag(m[2]);
+        }
       }
     }
   }
@@ -225,10 +232,12 @@ function parseEviTekst(text) {
 
   for (const naam of [...alleNamen].sort()) {
     if (skip.has(naam)) continue;
-    // Dividend matchen via prefix
+    // Dividend koppelen (exact match of prefix-match van 20 chars)
     let div = 0;
     for (const [dn, dv] of Object.entries(dividendenBruto)) {
-      if (naam.startsWith(dn.substring(0, 20)) || dn.startsWith(naam.substring(0, 20))) {
+      const n1 = naam.substring(0, 25).toLowerCase();
+      const n2 = dn.substring(0, 25).toLowerCase();
+      if (n1 === n2 || naam === dn || n1.startsWith(n2.substring(0,15)) || n2.startsWith(n1.substring(0,15))) {
         div = dv; break;
       }
     }
