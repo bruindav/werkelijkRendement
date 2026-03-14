@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { parseerPDF, detectBankType } from '../services/pdfParser';
 import Layout from '../components/Layout';
@@ -359,19 +359,10 @@ export default function ImportPage() {
         await addDoc(
           collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}/positions`),
           {
-            naam: pos.naam,
-            type: 'fonds',
-            ticker: '',
-            isin: '',
-            jan1_waarde: pos.jan1_waarde || 0,
-            dec31_waarde: pos.dec31_waarde || 0,
-            jan1_aantal: 0, jan1_prijs: 0,
-            dec31_aantal: 0, dec31_prijs: 0,
-            aankopen: [],
-            verkopen: [],
-            dividend: pos.dividend || 0,
-            rente: 0,
-            kosten: 0,
+            naam: pos.naam, type: 'fonds', ticker: '', isin: '',
+            jan1_waarde: pos.jan1_waarde || 0, dec31_waarde: pos.dec31_waarde || 0,
+            jan1_aantal: 0, jan1_prijs: 0, dec31_aantal: 0, dec31_prijs: 0,
+            aankopen: [], verkopen: [], dividend: pos.dividend || 0, rente: 0, kosten: 0,
           }
         );
       }
@@ -380,43 +371,31 @@ export default function ImportPage() {
       await addDoc(
         collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}/positions`),
         {
-          naam: rec.weergave_naam || 'Beleggingsrekening',
-          type: 'fonds',
-          ticker: '',
-          isin: '',
-          jan1_waarde: rec.jan1_waarde || 0,
-          dec31_waarde: rec.dec31_waarde || 0,
-          jan1_aantal: 0,
-          jan1_prijs: 0,
-          dec31_aantal: 0,
-          dec31_prijs: 0,
+          naam: rec.weergave_naam || 'Beleggingsrekening', type: 'fonds', ticker: '', isin: '',
+          jan1_waarde: rec.jan1_waarde || 0, dec31_waarde: rec.dec31_waarde || 0,
+          jan1_aantal: 0, jan1_prijs: 0, dec31_aantal: 0, dec31_prijs: 0,
           aankopen: rec.aankopen_totaal > 0
-            ? [{ datum: `${jaar}-01-01`, aantal: 0, prijs: 0, totaal: rec.aankopen_totaal }]
-            : [],
+            ? [{ datum: `${jaar}-01-01`, aantal: 0, prijs: 0, totaal: rec.aankopen_totaal }] : [],
           verkopen: rec.verkopen_totaal > 0
-            ? [{ datum: `${jaar}-12-31`, aantal: 0, prijs: 0, totaal: rec.verkopen_totaal }]
-            : [],
-          dividend: rec.dividend_totaal || 0,
-          rente: 0,
-          kosten: 0,
+            ? [{ datum: `${jaar}-12-31`, aantal: 0, prijs: 0, totaal: rec.verkopen_totaal }] : [],
+          dividend: rec.dividend_totaal || 0, rente: 0, kosten: 0,
         }
       );
     } else {
-      // Spaar of deposito: voeg spaargeld toe
-      const spaargeldData = {
-        jan1_saldo: rec.jan1_saldo || 0,
-        dec31_saldo: rec.dec31_saldo || 0,
-        ontvangen_rente: rec.ontvangen_rente || 0,
-        rente_pct: rec.rente_pct || 0,
-        kosten: rec.kosten || 0,
-        notitie: rec.notitie || (rec.iban ? `IBAN: ${rec.iban}` : ''),
-        ...(rec.looptijd_maanden ? { looptijd_maanden: rec.looptijd_maanden } : {}),
-        ...(rec.kenmerk ? { kenmerk: rec.kenmerk } : {}),
-        ...(rec.land ? { land: rec.land } : {}),
-      };
-      await addDoc(
-        collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}/spaargelden`),
-        spaargeldData
+      // Spaar of deposito: data direct op de rekening opslaan (geen subcollectie)
+      await updateDoc(
+        doc(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}`),
+        {
+          jan1_saldo: rec.jan1_saldo || 0,
+          dec31_saldo: rec.dec31_saldo || 0,
+          ontvangen_rente: rec.ontvangen_rente || 0,
+          rente_pct: rec.rente_pct || 0,
+          kosten: rec.kosten || 0,
+          notitie: rec.notitie || (rec.iban ? `IBAN: ${rec.iban}` : ''),
+          ...(rec.looptijd_maanden ? { looptijd_maanden: rec.looptijd_maanden } : {}),
+          ...(rec.kenmerk ? { kenmerk: rec.kenmerk } : {}),
+          ...(rec.land ? { land: rec.land } : {}),
+        }
       );
     }
   }
