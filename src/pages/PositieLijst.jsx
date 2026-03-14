@@ -77,6 +77,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     dividend: initial?.dividend || '',
     rente: initial?.rente || '',
     kosten: initial?.kosten || '',
+    maandelijks_bedrag: initial?.maandelijks_bedrag || '',
   });
   const [loadingKoers, setLoadingKoers] = useState(false);
 
@@ -156,6 +157,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
       dividend: parseFloat(form.dividend) || 0,
       rente: parseFloat(form.rente) || 0,
       kosten: parseFloat(form.kosten) || 0,
+      maandelijks_bedrag: parseFloat(form.maandelijks_bedrag) || 0,
     });
   };
 
@@ -256,6 +258,33 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         </div>
       </div>
 
+      {/* Automatische maandelijkse aankoop instelling */}
+      <div className="bg-blue-950/30 border border-blue-800/30 rounded-xl p-4">
+        <p className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2">
+          <Repeat className="w-4 h-4 text-blue-400" /> Automatische maandelijkse aankoop
+        </p>
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+          <div className="flex-1 max-w-xs">
+            <label className="block text-xs text-slate-400 mb-1">
+              Bedrag per maand (€) <span className="text-slate-500">— koers/aantal onbekend</span>
+            </label>
+            <input type="number" step="0.01" value={form.maandelijks_bedrag}
+              onChange={e => set('maandelijks_bedrag', e.target.value)}
+              placeholder="bijv. 100 — leeg = niet actief"
+              className="w-full bg-slate-700 border border-blue-600/40 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          {parseFloat(form.maandelijks_bedrag) > 0 && (
+            <div className="bg-blue-950/60 border border-blue-800/40 rounded-lg px-3 py-2 text-xs text-blue-300">
+              <Repeat className="w-3 h-3 inline mr-1" />
+              12 × €{parseFloat(form.maandelijks_bedrag).toFixed(2)} = <span className="font-medium text-white">€{(12 * parseFloat(form.maandelijks_bedrag)).toFixed(2)}</span>/jaar
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-slate-500 mt-2">
+          Sla dit op om later met één klik alle maandelijkse aankopen te genereren.
+        </p>
+      </div>
+
       <div className="flex gap-3 pt-2">
         <button onClick={handleSave} disabled={!form.naam}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl px-5 py-2.5 text-sm font-medium">
@@ -306,11 +335,22 @@ function TransactieRij({ transactie, kleur, onUpdate, onVerwijder }) {
     );
   }
 
+  const heeftAantalPrijs = transactie.aantal > 0 && transactie.prijs > 0;
+  const isAuto = transactie.auto;
+
   return (
     <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-3 gap-y-1 bg-slate-900/50 rounded-lg px-3 py-2 text-sm group">
       <span className="text-slate-400">{transactie.datum}</span>
-      <span className="text-slate-300">{transactie.aantal} × {formatEuro(transactie.prijs)}</span>
+      {heeftAantalPrijs
+        ? <span className="text-slate-300">{transactie.aantal} × {formatEuro(transactie.prijs)}</span>
+        : <span className="text-slate-500 text-xs italic">bedrag</span>
+      }
       <span className={`text-${kleur}-400 font-medium`}>{formatEuro(transactie.totaal)}</span>
+      {isAuto && (
+        <span className="text-xs bg-blue-900/40 text-blue-400 border border-blue-800/40 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+          <Repeat className="w-2.5 h-2.5" /> auto
+        </span>
+      )}
       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button onClick={() => setBewerken(true)} className="text-slate-500 hover:text-blue-400 p-0.5"><Edit3 className="w-3 h-3" /></button>
         <button onClick={onVerwijder} className="text-slate-500 hover:text-red-400 p-0.5"><X className="w-3 h-3" /></button>
@@ -319,41 +359,151 @@ function TransactieRij({ transactie, kleur, onUpdate, onVerwijder }) {
   );
 }
 
-function TransactieForm({ type, onSave, onCancel }) {
+function TransactieForm({ type, onSave, onCancel, year }) {
+  const [modus, setModus] = useState('enkel'); // 'enkel' | 'maandelijks'
   const [datum, setDatum] = useState('');
   const [aantal, setAantal] = useState('');
   const [prijs, setPrijs] = useState('');
+  const [bedrag, setBedrag] = useState(''); // alleen-bedrag modus
+  const [maandBedrag, setMaandBedrag] = useState('');
+  const [startMaand, setStartMaand] = useState('1');
+  const [eindMaand, setEindMaand] = useState('12');
   const totaal = parseFloat(aantal) * parseFloat(prijs) || 0;
+
+  const maanden = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+
+  const handleOpslaan = () => {
+    if (modus === 'maandelijks') {
+      // Genereer een transactie per maand
+      const start = parseInt(startMaand);
+      const eind = parseInt(eindMaand);
+      const bedragVal = parseFloat(maandBedrag) || 0;
+      const transacties = [];
+      for (let m = start; m <= eind; m++) {
+        const maandStr = String(m).padStart(2, '0');
+        transacties.push({
+          datum: `${year}-${maandStr}-01`,
+          aantal: 0,
+          prijs: 0,
+          totaal: bedragVal,
+          auto: true, // markeer als automatische aankoop
+        });
+      }
+      onSave(transacties); // array van transacties
+    } else if (modus === 'bedrag') {
+      onSave([{ datum, aantal: 0, prijs: 0, totaal: parseFloat(bedrag) || 0 }]);
+    } else {
+      onSave([{ datum, aantal: parseFloat(aantal) || 0, prijs: parseFloat(prijs) || 0, totaal }]);
+    }
+  };
+
+  const kanOpslaan = modus === 'maandelijks'
+    ? parseFloat(maandBedrag) > 0
+    : modus === 'bedrag'
+    ? datum && parseFloat(bedrag) > 0
+    : datum && (aantal || prijs);
 
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 mt-2">
-      <p className="text-sm font-medium text-slate-300 mb-3">{type === 'aankoop' ? 'Aankoop' : 'Verkoop'} toevoegen</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-        <div>
-          <label className="text-xs text-slate-400 block mb-1">Datum</label>
-          <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
-            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="text-xs text-slate-400 block mb-1">Aantal</label>
-          <input type="number" step="0.001" value={aantal} onChange={e => setAantal(e.target.value)}
-            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="text-xs text-slate-400 block mb-1">Prijs (€)</label>
-          <input type="number" step="0.01" value={prijs} onChange={e => setPrijs(e.target.value)}
-            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="text-xs text-slate-400 block mb-1">Totaal (€)</label>
-          <div className="bg-slate-700/50 border border-slate-700 text-slate-300 rounded-lg px-2 py-1.5 text-sm">{totaal.toFixed(2)}</div>
-        </div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-medium text-slate-300">{type === 'aankoop' ? 'Aankoop' : 'Verkoop'} toevoegen</p>
+        {type === 'aankoop' && (
+          <div className="flex gap-1 bg-slate-900 rounded-lg p-0.5 text-xs">
+            {[['enkel','Enkel'],['bedrag','Alleen bedrag'],['maandelijks','Maandelijks']].map(([v, l]) => (
+              <button key={v} onClick={() => setModus(v)}
+                className={`px-2 py-1 rounded-md transition-colors ${modus === v ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {modus === 'maandelijks' && (
+        <div className="space-y-3">
+          <div className="bg-blue-950/40 border border-blue-800/30 rounded-xl p-3">
+            <div className="flex items-center gap-2 text-blue-400 text-xs mb-3">
+              <Repeat className="w-3.5 h-3.5" />
+              Genereert één aankoop per maand voor het opgegeven bedrag
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Bedrag per maand (€)</label>
+                <input type="number" step="0.01" value={maandBedrag} onChange={e => setMaandBedrag(e.target.value)}
+                  placeholder="bijv. 100"
+                  className="w-full bg-slate-700 border border-blue-600/40 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Van maand</label>
+                <select value={startMaand} onChange={e => setStartMaand(e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {maanden.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Tot en met maand</label>
+                <select value={eindMaand} onChange={e => setEindMaand(e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {maanden.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+            {parseFloat(maandBedrag) > 0 && (
+              <p className="text-xs text-slate-400 mt-2">
+                → {parseInt(eindMaand) - parseInt(startMaand) + 1} aankopen × €{parseFloat(maandBedrag).toFixed(2)} = <span className="text-white font-medium">€{((parseInt(eindMaand) - parseInt(startMaand) + 1) * parseFloat(maandBedrag)).toFixed(2)}</span> totaal
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {modus === 'bedrag' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">Datum</label>
+            <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">Bedrag (€) <span className="text-slate-500">koers/aantal onbekend</span></label>
+            <input type="number" step="0.01" value={bedrag} onChange={e => setBedrag(e.target.value)}
+              placeholder="bijv. 100.00"
+              className="w-full bg-slate-700 border border-blue-600/40 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+      )}
+
+      {modus === 'enkel' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">Datum</label>
+            <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">Aantal</label>
+            <input type="number" step="0.001" value={aantal} onChange={e => setAantal(e.target.value)}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">Prijs (€)</label>
+            <input type="number" step="0.01" value={prijs} onChange={e => setPrijs(e.target.value)}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">Totaal (€)</label>
+            <div className="bg-slate-700/50 border border-slate-700 text-slate-300 rounded-lg px-2 py-1.5 text-sm">{totaal.toFixed(2)}</div>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2 mt-3">
-        <button onClick={() => onSave({ datum, aantal: parseFloat(aantal), prijs: parseFloat(prijs), totaal })}
-          disabled={!datum || !aantal || !prijs}
+        <button onClick={handleOpslaan} disabled={!kanOpslaan}
           className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1">
-          <Check className="w-3 h-3" /> Toevoegen
+          <Check className="w-3 h-3" />
+          {modus === 'maandelijks'
+            ? `${parseInt(eindMaand) - parseInt(startMaand) + 1} aankopen genereren`
+            : 'Toevoegen'}
         </button>
         <button onClick={onCancel} className="text-slate-400 text-xs px-2">Annuleren</button>
       </div>
@@ -370,9 +520,11 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
   const r = berekenPositieRendement(positie);
   const pos = r.totaalRendement >= 0;
 
-  const voegTransactieToe = async (type, transactie) => {
+  const voegTransactieToe = async (type, transacties) => {
+    // transacties is altijd een array (enkelvoudig of meerdere)
+    const nieuw = Array.isArray(transacties) ? transacties : [transacties];
     const huidig = positie[type] || [];
-    await onUpdate(positie.id, { [type]: [...huidig, transactie] });
+    await onUpdate(positie.id, { [type]: [...huidig, ...nieuw] });
     type === 'aankopen' ? setToonAankoop(false) : setToonVerkoop(false);
   };
 
@@ -412,6 +564,11 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-white">{positie.naam}</span>
             <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">{positie.type}</span>
+            {positie.maandelijks_bedrag > 0 && (
+              <span className="text-xs bg-blue-900/40 text-blue-400 border border-blue-800/40 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Repeat className="w-2.5 h-2.5" /> €{positie.maandelijks_bedrag}/mnd
+              </span>
+            )}
             {positie.ticker && <span className="text-xs text-blue-400 font-mono">{positie.ticker}</span>}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm">
@@ -478,12 +635,36 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
 
           <div>
             <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+              <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-medium text-slate-300">Aankopen ({positie.aankopen?.length || 0})</p>
+              {positie.maandelijks_bedrag > 0 && (
+                <button
+                  onClick={() => {
+                    const bestaand = positie.aankopen || [];
+                    const heeftAl = bestaand.some(a => a.auto && a.datum?.startsWith(year));
+                    if (heeftAl && !window.confirm('Er zijn al automatische aankopen voor dit jaar. Opnieuw genereren?')) return;
+                    const nieuw = Array.from({length: 12}, (_, i) => ({
+                      datum: `${year}-${String(i+1).padStart(2,'0')}-01`,
+                      aantal: 0, prijs: 0,
+                      totaal: positie.maandelijks_bedrag,
+                      auto: true,
+                    }));
+                    const zonder = bestaand.filter(a => !(a.auto && a.datum?.startsWith(year)));
+                    onUpdate(positie.id, { aankopen: [...zonder, ...nieuw] });
+                  }}
+                  className="text-xs bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 rounded-full px-2 py-0.5 flex items-center gap-1 transition-colors"
+                  title={`Genereer 12 × €${positie.maandelijks_bedrag} automatische aankopen`}
+                >
+                  <Repeat className="w-3 h-3" />
+                  Genereer {year} (12 × €{positie.maandelijks_bedrag})
+                </button>
+              )}
+            </div>
               <button onClick={() => setToonAankoop(!toonAankoop)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
                 <Plus className="w-3 h-3" /> Toevoegen
               </button>
             </div>
-            {toonAankoop && <TransactieForm type="aankoop" onSave={t => voegTransactieToe('aankopen', t)} onCancel={() => setToonAankoop(false)} />}
+            {toonAankoop && <TransactieForm type="aankoop" year={year} onSave={t => voegTransactieToe('aankopen', t)} onCancel={() => setToonAankoop(false)} />}
             {positie.aankopen?.length > 0 && (
               <div className="space-y-1 mt-2">
                 {positie.aankopen.map((a, i) => (
