@@ -37,11 +37,16 @@ export default function Dashboard() {
   const [loadingTotalen, setLoadingTotalen] = useState(true);
   const [instellingen, setInstellingen] = useState(null);
 
-  // Laad gebruikersinstellingen eenmalig
+  // Laad gebruikersinstellingen eenmalig (niet bij elke render opnieuw)
   useEffect(() => {
     if (!user?.uid) return;
     getDoc(doc(db, `users/${user.uid}/instellingen/box3`)).then(snap => {
-      setInstellingen(snap.exists() ? snap.data() : {});
+      const data = snap.exists() ? snap.data() : {};
+      setInstellingen(prev => {
+        // Alleen updaten als de data echt veranderd is
+        if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
+        return data;
+      });
     });
   }, [user?.uid]);
   const [kopieerBezig, setKopieerBezig] = useState(false);
@@ -140,7 +145,8 @@ export default function Dashboard() {
     }
 
     laadTotalen();
-  }, [user?.uid, selectedYear, banken]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(','), instellingen]);
 
   const handleKopieer = async () => {
     const vanJaar = selectedYear - 1;
