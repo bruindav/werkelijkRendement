@@ -9,6 +9,7 @@ import PositieLijst from './pages/PositieLijst';
 import AangiftePage from './pages/AangiftePage';
 import SpaarpaginaLijst from './pages/SpaarpaginaLijst';
 import ImportPage from './pages/ImportPage';
+import InstellingenPage from './pages/InstellingenPage';
 
 function AuthGuardNoLayout({ children }) {
   const { user, loading } = useApp();
@@ -44,6 +45,7 @@ function AppRoutes() {
       <Route path="/jaar/:year/bank/:bankId/rekening/:accountId/sparen" element={<AuthGuard><SpaarpaginaLijst /></AuthGuard>} />
       <Route path="/aangifte/:year" element={<AuthGuard><AangiftePage /></AuthGuard>} />
       <Route path="/importeren" element={<AuthGuardNoLayout><ImportPage /></AuthGuardNoLayout>} />
+      <Route path="/instellingen" element={<AuthGuardNoLayout><InstellingenPage /></AuthGuardNoLayout>} />
     </Routes>
   );
 }
