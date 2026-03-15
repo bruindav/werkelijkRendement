@@ -6,6 +6,7 @@ import { useRekeningen, useBank } from '../hooks/useFirestore';
 import Breadcrumb from '../components/Breadcrumb';
 import { CreditCard, TrendingUp, PiggyBank, Lock, Plus, Trash2, ArrowRight,
          X, Check, Edit3, ChevronDown, ChevronUp, Calculator, Percent } from 'lucide-react';
+import DragLijst, { DragHandle } from '../components/DragLijst';
 
 const fmt = (v) => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(v || 0);
 
@@ -116,6 +117,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
     ontvangen_rente:     rek.ontvangen_rente || '',
     kosten:              rek.kosten || '',
     notitie:             rek.notitie || '',
+    kenmerk:             rek.kenmerk || '',
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -251,12 +253,20 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
         </div>
       )}
 
-      {/* Notitie */}
-      <div>
-        <label className="block text-xs text-slate-400 mb-1">Notitie</label>
-        <input value={form.notitie} onChange={e => set('notitie', e.target.value)}
-          placeholder="bijv. automatisch verlengd, garantiebank..."
-          className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      {/* Kenmerk + Notitie */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Kenmerk <span className="text-slate-500">(bijv. Raisin product ID)</span></label>
+          <input value={form.kenmerk} onChange={e => set('kenmerk', e.target.value)}
+            placeholder="bijv. FDA_121_929_128_236"
+            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Notitie</label>
+          <input value={form.notitie} onChange={e => set('notitie', e.target.value)}
+            placeholder="bijv. automatisch verlengd, garantiebank..."
+            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
       </div>
 
       <div className="flex gap-3 pt-1">
@@ -271,6 +281,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
           ontvangen_rente:     parseFloat(form.ontvangen_rente) || 0,
           kosten:              parseFloat(form.kosten) || 0,
           notitie:             form.notitie || '',
+          kenmerk:             form.kenmerk || '',
         })}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2 text-sm font-medium">
           <Check className="w-4 h-4" /> Opslaan
@@ -282,7 +293,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
 }
 
 // ============ REKENING RIJ ============
-function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder }) {
+function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps }) {
   const [open, setOpen] = useState(false);
   const [bewerkenNaam, setBewerkenNaam] = useState(false);
   const info = typeInfo(rek.type);
@@ -307,7 +318,8 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder }) {
   if (rek.type === 'beleggen') {
     // Beleggingsrekening: navigeert naar posities pagina
     return (
-      <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 flex items-center gap-3 group">
+      <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 flex items-center gap-2 group">
+        <DragHandle dragHandleProps={dragHandleProps} />
         <Link to={`/jaar/${year}/bank/${bankId}/rekening/${rek.id}`} className="flex items-center gap-4 flex-1 min-w-0">
           <div className="w-11 h-11 bg-purple-600/20 border border-purple-600/30 rounded-xl flex items-center justify-center text-xl flex-shrink-0">📈</div>
           <div className="min-w-0">
@@ -339,7 +351,8 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder }) {
       open ? 'border-blue-600/40 bg-slate-800/60' : 'border-slate-700 bg-slate-800/40'
     }`}>
       {/* Header rij */}
-      <div className="p-4 flex items-start gap-3 group">
+      <div className="p-4 flex items-start gap-2 group">
+        <DragHandle dragHandleProps={dragHandleProps} />
         <button onClick={() => setOpen(!open)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
           <div className={`w-11 h-11 bg-${info.kleur}-600/20 border border-${info.kleur}-600/30 rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>
             {info.emoji}
@@ -355,7 +368,7 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder }) {
 
             {/* Samenvatting data als aanwezig */}
             {heeftData ? (
-              <div className="flex flex-wrap gap-3 mt-1.5 text-xs">
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-xs">
                 {rek.jan1_saldo > 0 && (
                   <span className="text-slate-400">1 jan: <span className="text-white">{fmt(rek.jan1_saldo)}</span></span>
                 )}
@@ -375,6 +388,9 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder }) {
                 )}
                 {dagenTotEinde !== null && dagenTotEinde <= 0 && (
                   <span className="text-red-400">Verlopen</span>
+                )}
+                {rek.kenmerk && (
+                  <span className="text-slate-500 font-mono text-xs">[{rek.kenmerk}]</span>
                 )}
               </div>
             ) : (
@@ -416,7 +432,7 @@ export default function BankDetail() {
   const { year, bankId } = useParams();
   const { user } = useApp();
   const bank = useBank(user?.uid, year, bankId);
-  const { rekeningen, loading, voegRekeningToe, updateRekening, verwijderRekening } = useRekeningen(user?.uid, year, bankId);
+  const { rekeningen, loading, voegRekeningToe, updateRekening, verwijderRekening, slaVolgorde } = useRekeningen(user?.uid, year, bankId);
   const [toonForm, setToonForm] = useState(false);
 
   const handleVerwijder = async (rek) => {
@@ -462,12 +478,21 @@ export default function BankDetail() {
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {rekeningen.map(rek => (
-            <RekeningRij key={rek.id} rek={rek} year={year} bankId={bankId}
-              onUpdate={updateRekening} onVerwijder={handleVerwijder} />
-          ))}
-        </div>
+        <DragLijst
+          items={rekeningen}
+          onVolgorde={slaVolgorde}
+          renderItem={(rek, dragHandleProps) => (
+            <RekeningRij
+              key={rek.id}
+              rek={rek}
+              year={year}
+              bankId={bankId}
+              onUpdate={updateRekening}
+              onVerwijder={handleVerwijder}
+              dragHandleProps={dragHandleProps}
+            />
+          )}
+        />
       )}
     </div>
   );

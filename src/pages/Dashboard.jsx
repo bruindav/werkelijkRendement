@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken, useRekeningen, kopieerJaar } from '../hooks/useFirestore';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
-import { getDocs, collection } from 'firebase/firestore';
+import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { TrendingUp, TrendingDown, Building2, ArrowRight, Copy, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Building2, ArrowRight, Copy, AlertCircle, Settings } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
 
@@ -35,6 +35,15 @@ export default function Dashboard() {
   const { banken } = useBanken(user?.uid, selectedYear);
   const [totalen, setTotalen] = useState(null);
   const [loadingTotalen, setLoadingTotalen] = useState(true);
+  const [instellingen, setInstellingen] = useState(null);
+
+  // Laad gebruikersinstellingen eenmalig
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDoc(doc(db, `users/${user.uid}/instellingen/box3`)).then(snap => {
+      setInstellingen(snap.exists() ? snap.data() : {});
+    });
+  }, [user?.uid]);
   const [kopieerBezig, setKopieerBezig] = useState(false);
   const [kopieerSuccess, setKopieerSuccess] = useState(false);
 
@@ -51,43 +60,82 @@ export default function Dashboard() {
       let totaalRendement = 0;
       let totaalVermogenJan1 = 0;
       let totaalVermogenDec31 = 0;
+      let totaalSparenJan1 = 0;
+      let totaalBeleggenJan1 = 0;
       let aantalPosities = 0;
+      const bankDetails = [];
 
       for (const bank of banken) {
+        let bankJan1 = 0, bankDec31 = 0, bankRendement = 0;
+        const bankRekeningen = [];
+
         const rekeningenSnap = await getDocs(
           collection(db, `users/${user.uid}/years/${selectedYear}/banks/${bank.id}/accounts`)
         );
         for (const rek of rekeningenSnap.docs) {
           const rekData = rek.data();
+          let rekJan1 = 0, rekDec31 = 0, rekRendement = 0;
 
           if (rekData.type === 'beleggen' || !rekData.type) {
-            // Beleggingsrekening: posities optellen
             const positiesSnap = await getDocs(
               collection(db, `users/${user.uid}/years/${selectedYear}/banks/${bank.id}/accounts/${rek.id}/positions`)
             );
             for (const pos of positiesSnap.docs) {
               const r = berekenPositieRendement(pos.data());
-              totaalRendement += r.totaalRendement;
-              totaalVermogenJan1 += r.waardeJan1;
-              totaalVermogenDec31 += r.waardeDec31;
+              rekJan1 += r.waardeJan1;
+              rekDec31 += r.waardeDec31;
+              rekRendement += r.totaalRendement;
               aantalPosities++;
+              totaalBeleggenJan1 += r.waardeJan1;
             }
           } else {
-            // Spaar- of depositorekening: data staat direct op de rekening
-            const d = rek.data();
+            const d = rekData;
             if (d.jan1_saldo || d.dec31_saldo || d.ontvangen_rente) {
-              const rente = (d.ontvangen_rente || 0) - (d.kosten || 0);
-              totaalRendement += rente;
-              totaalVermogenJan1 += d.jan1_saldo || 0;
-              totaalVermogenDec31 += d.dec31_saldo || 0;
+              rekJan1 = d.jan1_saldo || 0;
+              rekDec31 = d.dec31_saldo || 0;
+              rekRendement = (d.ontvangen_rente || 0) - (d.kosten || 0);
               aantalPosities++;
+              totaalSparenJan1 += rekJan1;
             }
           }
+
+          if (rekJan1 || rekDec31 || rekRendement) {
+            bankRekeningen.push({
+              id: rek.id,
+              naam: rekData.naam,
+              type: rekData.type || 'beleggen',
+              jan1: rekJan1,
+              dec31: rekDec31,
+              rendement: rekRendement,
+              volgorde: rekData.volgorde ?? 999,
+            });
+            bankJan1 += rekJan1;
+            bankDec31 += rekDec31;
+            bankRendement += rekRendement;
+          }
         }
+
+        if (bankJan1 || bankDec31 || bankRendement) {
+          bankDetails.push({
+            id: bank.id,
+            naam: bank.naam,
+            jan1: bankJan1,
+            dec31: bankDec31,
+            rendement: bankRendement,
+            volgorde: bank.volgorde ?? 999,
+            rekeningen: bankRekeningen.sort((a, b) => a.volgorde - b.volgorde),
+          });
+        }
+
+        totaalRendement += bankRendement;
+        totaalVermogenJan1 += bankJan1;
+        totaalVermogenDec31 += bankDec31;
       }
 
-      const vergelijk = vergelijkMethoden(totaalRendement, totaalVermogenJan1, selectedYear);
-      setTotalen({ totaalRendement, totaalVermogenJan1, totaalVermogenDec31, aantalPosities, vergelijk });
+      const vermogenSplit = { sparen: totaalSparenJan1, beleggen: totaalBeleggenJan1 };
+      const vergelijk = vergelijkMethoden(totaalRendement, totaalVermogenJan1, selectedYear, instellingen, vermogenSplit);
+      setTotalen({ totaalRendement, totaalVermogenJan1, totaalVermogenDec31, aantalPosities, vergelijk, vermogenSplit,
+        bankDetails: bankDetails.sort((a, b) => a.volgorde - b.volgorde) });
       setLoadingTotalen(false);
     }
 
@@ -127,6 +175,13 @@ export default function Dashboard() {
             <Copy className="w-4 h-4" />
             {kopieerBezig ? 'Bezig...' : kopieerSuccess ? '✓ Gekopieerd!' : `Kopieer van ${selectedYear - 1}`}
           </button>
+          <Link
+            to="/instellingen"
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            Instellingen
+          </Link>
           <Link
             to={`/jaar/${selectedYear}`}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-colors"
@@ -190,6 +245,13 @@ export default function Dashboard() {
               <p className="text-sm text-slate-400 mb-1">Forfaitair rendement ({formatPct(totalen.vergelijk.forfaitair.forfaitairPercentage)})</p>
               <p className="text-xl font-bold text-white">{formatEuro(totalen.vergelijk.forfaitair.forfaitairRendement)}</p>
               <p className="text-sm text-slate-500 mt-1">Belasting: {formatEuro(totalen.vergelijk.forfaitair.belasting)}</p>
+              {totalen.vergelijk.forfaitair.splitsing && (
+                <div className="mt-2 space-y-0.5 text-xs text-slate-600">
+                  <p>Sparen: {formatPct(totalen.vergelijk.forfaitair.splitsing.sparen.pct)} × {formatEuro(totalen.vergelijk.forfaitair.splitsing.sparen.belastbaar)}</p>
+                  <p>Beleggen: {formatPct(totalen.vergelijk.forfaitair.splitsing.beleggen.pct)} × {formatEuro(totalen.vergelijk.forfaitair.splitsing.beleggen.belastbaar)}</p>
+                  <p className="text-slate-500">Heffingsvrij: {formatEuro(totalen.vergelijk.forfaitair.heffingsvrij)}</p>
+                </div>
+              )}
             </div>
             <div className="bg-slate-900/50 rounded-xl p-4">
               <p className="text-sm text-slate-400 mb-1">Werkelijk rendement</p>
@@ -207,24 +269,98 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Banken overzicht */}
-      <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">Banken & Brokers</h2>
+      {/* Banken specificatie */}
+      <div className="bg-slate-800/40 border border-slate-700 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between p-5 border-b border-slate-700">
+          <h2 className="text-lg font-semibold text-white">Specificatie per bank</h2>
           <Link to={`/jaar/${selectedYear}`} className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
             Beheer <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
+
         {banken.length === 0 ? (
-          <p className="text-slate-500 text-center py-6">Nog geen banken toegevoegd</p>
+          <p className="text-slate-500 text-center py-8">Nog geen banken toegevoegd</p>
+        ) : loadingTotalen ? (
+          <div className="p-5 space-y-2">
+            {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-slate-700 rounded-lg animate-pulse" />)}
+          </div>
+        ) : totalen?.bankDetails?.length > 0 ? (
+          <div>
+            {/* Kolomheaders */}
+            <div className="hidden sm:grid grid-cols-[1fr_120px_120px_100px_32px] gap-2 px-5 py-2 text-xs text-slate-500 border-b border-slate-800">
+              <span>Rekening</span>
+              <span className="text-right">1 januari</span>
+              <span className="text-right">31 december</span>
+              <span className="text-right">Rendement</span>
+              <span></span>
+            </div>
+
+            {totalen.bankDetails.map(bank => (
+              <div key={bank.id} className="border-b border-slate-800 last:border-0">
+                {/* Bank header */}
+                <Link to={`/jaar/${selectedYear}/bank/${bank.id}`}
+                  className="flex items-center gap-3 px-5 py-3 bg-slate-900/30 hover:bg-slate-900/60 transition-colors group">
+                  <div className="w-7 h-7 bg-blue-600/20 border border-blue-600/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                  </div>
+                  <span className="font-semibold text-white flex-1 text-sm">{bank.naam}</span>
+                  <div className="hidden sm:flex items-center gap-6 text-sm">
+                    <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.jan1)}</span>
+                    <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.dec31)}</span>
+                    <span className={`w-[100px] text-right font-medium ${bank.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {bank.rendement >= 0 ? '+' : ''}{formatEuro(bank.rendement)}
+                    </span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 flex-shrink-0" />
+                </Link>
+
+                {/* Rekeningen onder de bank */}
+                {bank.rekeningen.map(rek => {
+                  const typeEmoji = rek.type === 'beleggen' ? '📈' : rek.type === 'deposito' ? '🔒' : '🏦';
+                  return (
+                    <Link
+                      key={rek.id}
+                      to={rek.type === 'beleggen'
+                        ? `/jaar/${selectedYear}/bank/${bank.id}/rekening/${rek.id}`
+                        : `/jaar/${selectedYear}/bank/${bank.id}`}
+                      className="flex items-center gap-3 px-5 py-2.5 pl-14 hover:bg-slate-900/30 transition-colors group"
+                    >
+                      <span className="text-base flex-shrink-0">{typeEmoji}</span>
+                      <span className="text-sm text-slate-400 flex-1 truncate">{rek.naam}</span>
+                      <div className="hidden sm:flex items-center gap-6 text-xs">
+                        <span className="w-[120px] text-right text-slate-500">{formatEuro(rek.jan1)}</span>
+                        <span className="w-[120px] text-right text-slate-500">{formatEuro(rek.dec31)}</span>
+                        <span className={`w-[100px] text-right ${rek.rendement >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'}`}>
+                          {rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}
+                        </span>
+                      </div>
+                      <div className="w-[18px] flex-shrink-0" />
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+
+            {/* Totaalregel */}
+            {totalen && (
+              <div className="flex items-center gap-3 px-5 py-3 bg-slate-900/50 border-t border-slate-700">
+                <span className="text-sm font-semibold text-slate-300 flex-1">Totaal</span>
+                <div className="hidden sm:flex items-center gap-6 text-sm">
+                  <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenJan1)}</span>
+                  <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenDec31)}</span>
+                  <span className={`w-[100px] text-right font-bold ${totalen.totaalRendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {totalen.totaalRendement >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendement)}
+                  </span>
+                </div>
+                <div className="w-[18px] flex-shrink-0" />
+              </div>
+            )}
+          </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 p-5">
             {banken.map(bank => (
-              <Link
-                key={bank.id}
-                to={`/jaar/${selectedYear}/bank/${bank.id}`}
-                className="flex items-center justify-between p-4 bg-slate-900/50 hover:bg-slate-900 rounded-xl transition-colors"
-              >
+              <Link key={bank.id} to={`/jaar/${selectedYear}/bank/${bank.id}`}
+                className="flex items-center justify-between p-4 bg-slate-900/50 hover:bg-slate-900 rounded-xl transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-blue-600/20 border border-blue-600/30 rounded-lg flex items-center justify-center">
                     <Building2 className="w-4 h-4 text-blue-400" />
