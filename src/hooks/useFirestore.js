@@ -32,7 +32,17 @@ export function useBanken(uid, year) {
   const updateBank = (id, data) => updateDoc(doc(db, banksPath(uid, year), id), data);
   const verwijderBank = (id) => deleteDoc(doc(db, banksPath(uid, year), id));
 
-  return { banken, loading, voegBankToe, updateBank, verwijderBank };
+  const slaVolgorde = async (gesorteerdeBanken) => {
+    // Sla volgorde op door index toe te voegen aan elk document
+    await Promise.all(gesorteerdeBanken.map((bank, i) =>
+      updateDoc(doc(db, banksPath(uid, year), bank.id), { volgorde: i })
+    ));
+  };
+
+  // Sorteer op volgorde veld
+  const gesorteerd = [...banken].sort((a, b) => (a.volgorde ?? 999) - (b.volgorde ?? 999));
+
+  return { banken: gesorteerd, loading, voegBankToe, updateBank, verwijderBank, slaVolgorde };
 }
 
 // ============ REKENINGEN ============
@@ -54,7 +64,15 @@ export function useRekeningen(uid, year, bankId) {
   const updateRekening = (id, data) => updateDoc(doc(db, accountsPath(uid, year, bankId), id), data);
   const verwijderRekening = (id) => deleteDoc(doc(db, accountsPath(uid, year, bankId), id));
 
-  return { rekeningen, loading, voegRekeningToe, updateRekening, verwijderRekening };
+  const slaVolgorde = async (gesorteerdeRekeningen) => {
+    await Promise.all(gesorteerdeRekeningen.map((rek, i) =>
+      updateDoc(doc(db, accountsPath(uid, year, bankId), rek.id), { volgorde: i })
+    ));
+  };
+
+  const gesorteerd = [...rekeningen].sort((a, b) => (a.volgorde ?? 999) - (b.volgorde ?? 999));
+
+  return { rekeningen: gesorteerd, loading, voegRekeningToe, updateRekening, verwijderRekening, slaVolgorde };
 }
 
 // ============ POSITIES ============
