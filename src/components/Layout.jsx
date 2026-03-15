@@ -47,6 +47,7 @@ export default function Layout({ children }) {
     { to: `/jaar/${selectedYear}`, icon: Building2, label: 'Banken & Posities' },
     { to: `/aangifte/${selectedYear}`, icon: FileText, label: 'Aangifte Export' },
     { to: '/importeren', icon: Upload, label: 'Importeren', exact: true },
+    { to: '/instellingen', icon: Settings, label: 'Instellingen', exact: true },
     { to: '/instellingen', icon: Settings, label: 'Instellingen' },
   ];
 
