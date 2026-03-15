@@ -15,6 +15,21 @@ export const HEFFINGSVRIJ_VERMOGEN = {
   2025: 57000,
 };
 
+// Helper: haal tarieven op (eigen instelling of standaard Belastingdienst)
+export function getTarieven(jaar, instellingen = null) {
+  const standaard = FORFAITAIR_TARIEVEN[jaar] || FORFAITAIR_TARIEVEN[2025];
+  if (!instellingen?.tarieven?.[jaar]) return standaard;
+  return { ...standaard, ...instellingen.tarieven[jaar] };
+}
+
+// Helper: haal heffingsvrij op (incl. partner-verdubbeling)
+export function getHeffingsvrij(jaar, instellingen = null) {
+  const standaard = HEFFINGSVRIJ_VERMOGEN[jaar] || 57000;
+  const eigen = instellingen?.heffingsvrij?.[jaar] ?? standaard;
+  const partner = instellingen?.partner ? 2 : 1;
+  return eigen * partner;
+}
+
 /**
  * Bereken werkelijk rendement per positie
  */
@@ -69,9 +84,9 @@ export function berekenRekeningTotaal(posities) {
 /**
  * Bereken forfaitair rendement
  */
-export function berekenForfaitair(vermogenJan1, jaar, type = 'beleggingen') {
-  const tarieven = FORFAITAIR_TARIEVEN[jaar] || FORFAITAIR_TARIEVEN[2024];
-  const heffingsvrij = HEFFINGSVRIJ_VERMOGEN[jaar] || 57000;
+export function berekenForfaitair(vermogenJan1, jaar, type = 'beleggingen', instellingen = null) {
+  const tarieven = getTarieven(jaar, instellingen);
+  const heffingsvrij = getHeffingsvrij(jaar, instellingen);
   const belastbaarVermogen = Math.max(0, vermogenJan1 - heffingsvrij);
   const forfaitairRendement = belastbaarVermogen * tarieven[type];
   const belasting = forfaitairRendement * tarieven.belasting;
@@ -90,18 +105,26 @@ export function berekenForfaitair(vermogenJan1, jaar, type = 'beleggingen') {
 /**
  * Bereken werkelijke belasting
  */
-export function berekenWerkelijkeBelasting(werkelijkRendement, jaar) {
-  const tarieven = FORFAITAIR_TARIEVEN[jaar] || FORFAITAIR_TARIEVEN[2024];
+export function berekenWerkelijkeBelasting(werkelijkRendement, jaar, instellingen = null) {
+  const tarieven = getTarieven(jaar, instellingen);
   const belasting = Math.max(0, werkelijkRendement) * tarieven.belasting;
   return { belasting, percentage: tarieven.belasting * 100 };
 }
 
 /**
  * Vergelijk werkelijk vs forfaitair
+ * instellingen: { tarieven: {jaar: {...}}, heffingsvrij: {jaar: n}, partner: bool }
  */
-export function vergelijkMethoden(werkelijkRendement, vermogenJan1, jaar) {
-  const werkelijk = berekenWerkelijkeBelasting(werkelijkRendement, jaar);
-  const forfaitair = berekenForfaitair(vermogenJan1, jaar);
+export function vergelijkMethoden(werkelijkRendement, vermogenJan1, jaar, instellingen = null, vermogenSplit = null) {
+  const werkelijk = berekenWerkelijkeBelasting(werkelijkRendement, jaar, instellingen);
+
+  // Forfaitair met sparen/beleggen split als beschikbaar
+  let forfaitair;
+  if (vermogenSplit && (vermogenSplit.sparen > 0 || vermogenSplit.beleggen > 0)) {
+    forfaitair = berekenForfaitairSplit(vermogenSplit.sparen, vermogenSplit.beleggen, jaar, instellingen);
+  } else {
+    forfaitair = berekenForfaitair(vermogenJan1, jaar, 'beleggingen', instellingen);
+  }
 
   const voordeel = forfaitair.belasting - werkelijk.belasting;
   const voordeliigsteMethode = voordeel > 0 ? 'werkelijk' : 'forfaitair';
@@ -113,6 +136,46 @@ export function vergelijkMethoden(werkelijkRendement, vermogenJan1, jaar) {
     voordeliigsteMethode,
   };
 }
+
+/**
+ * Forfaitair met aparte sparen/beleggen percentages
+ */
+export function berekenForfaitairSplit(vermogenSparen, vermogenBeleggen, jaar, instellingen = null) {
+  const tarieven = getTarieven(jaar, instellingen);
+  const heffingsvrij = getHeffingsvrij(jaar, instellingen);
+
+  const totaalVermogen = vermogenSparen + vermogenBeleggen;
+  const belastbaarTotaal = Math.max(0, totaalVermogen - heffingsvrij);
+
+  // Verdeel heffingsvrij pro-rata over sparen en beleggen
+  const fracSparen = totaalVermogen > 0 ? vermogenSparen / totaalVermogen : 0;
+  const fracBeleggen = totaalVermogen > 0 ? vermogenBeleggen / totaalVermogen : 0;
+
+  const belastbaarSparen = belastbaarTotaal * fracSparen;
+  const belastbaarBeleggen = belastbaarTotaal * fracBeleggen;
+
+  const rendementSparen = belastbaarSparen * tarieven.spaargeld;
+  const rendementBeleggen = belastbaarBeleggen * tarieven.beleggingen;
+  const forfaitairRendement = rendementSparen + rendementBeleggen;
+  const belasting = forfaitairRendement * tarieven.belasting;
+
+  return {
+    vermogenJan1: totaalVermogen,
+    heffingsvrij,
+    belastbaarVermogen: belastbaarTotaal,
+    forfaitairPercentage: totaalVermogen > 0
+      ? ((rendementSparen + rendementBeleggen) / totaalVermogen) * 100 : 0,
+    forfaitairRendement,
+    belastingPercentage: tarieven.belasting * 100,
+    belasting,
+    // Extra info voor display
+    splitsing: {
+      sparen: { vermogen: vermogenSparen, belastbaar: belastbaarSparen, rendement: rendementSparen, pct: tarieven.spaargeld * 100 },
+      beleggen: { vermogen: vermogenBeleggen, belastbaar: belastbaarBeleggen, rendement: rendementBeleggen, pct: tarieven.beleggingen * 100 },
+    }
+  };
+}
+
 
 export function formatEuro(amount) {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(amount || 0);
