@@ -8,7 +8,14 @@ const AppContext = createContext(null);
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  // Standaard jaar: vorig jaar tot 1 juni van het huidige jaar, daarna huidig jaar
+  const bepaalStandaardJaar = () => {
+    const nu = new Date();
+    const huidigJaar = nu.getFullYear();
+    const na31Mei = nu.getMonth() >= 5; // maand 5 = juni (0-indexed)
+    return na31Mei ? huidigJaar : huidigJaar - 1;
+  };
+  const [selectedYear, setSelectedYear] = useState(bepaalStandaardJaar());
   const [isEditing, setIsEditing] = useState(false); // true als er een form open staat
 
   useEffect(() => {
