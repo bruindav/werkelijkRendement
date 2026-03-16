@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { LayoutDashboard, Building2, FileText, Upload, Settings, LogOut, ChevronDown, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, LogOut, ChevronDown, Menu, X } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
 
@@ -48,6 +48,7 @@ export default function Layout({ children }) {
     { to: `/aangifte/${selectedYear}`, icon: FileText, label: 'Aangifte Export' },
     { to: '/importeren', icon: Upload, label: 'Importeren', exact: true },
     { to: '/instellingen', icon: Settings, label: 'Instellingen', exact: true },
+    { to: '/backup', icon: Shield, label: 'Backup & Restore', exact: true },
   ];
 
   return (
