@@ -1,5 +1,7 @@
 // Fix102 - Multi-file import — meerdere PDF bestanden tegelijk
-// Fix104 - Mobiele import fix: label ipv div+onClick, accept application/pdf toegevoegd
+// Fix104 - Mobiele import fix
+// Fix104 - Mobiele import fix: label+htmlFor patroon voor iOS Safari
+// Fix105 - Gratis limiet: max 1 PDF
 import { useState, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
@@ -7,7 +9,8 @@ import { importeerBank } from '../hooks/useLocalDB';
 import { parseerPDF, detectBankType } from '../services/pdfParser';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
-import { Upload, FileText, CheckCircle, AlertCircle, Loader, X, ArrowRight, Check } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader, X, ArrowRight, Check, Lock } from 'lucide-react';
+import { useLicentie } from '../hooks/useLicentie';
 
 // ============ PDF TEKST EXTRACTOR ============
 async function laadPdfJs() {
@@ -159,6 +162,7 @@ function BestandKaart({ item, onVerwijder, onToggleRekening, onJaarChange }) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef();
+  const { proActief, limieten } = useLicentie();
   const [bestanden, setBestanden] = useState([]); // array van { id, bestandsnaam, file, status, resultaat, geselecteerd, importJaar, fout }
   const [importStatus, setImportStatus] = useState(null); // null | 'bezig' | 'klaar'
   const [importResultaat, setImportResultaat] = useState(null);
@@ -173,8 +177,19 @@ export default function ImportPage() {
   const verwerkBestanden = async (files) => {
     await laadPdfJs();
 
-    const nieuw = Array.from(files)
-      .filter(f => f.type === 'application/pdf')
+    let fileArray = Array.from(files).filter(f => f.type === 'application/pdf');
+
+    // Gratis limiet: max 1 PDF totaal (inclusief al geladen bestanden)
+    if (!proActief && limieten) {
+      const resterend = limieten.import - bestanden.filter(b => b.status !== 'fout').length;
+      if (resterend <= 0) {
+        alert('De gratis versie ondersteunt maar 1 PDF. Upgrade naar Pro voor meerdere bestanden.');
+        return;
+      }
+      fileArray = fileArray.slice(0, resterend);
+    }
+
+    const nieuw = fileArray
       .map(f => ({
         id: Math.random().toString(36).slice(2),
         bestandsnaam: f.name,
@@ -188,6 +203,7 @@ export default function ImportPage() {
 
     if (nieuw.length === 0) return;
 
+    if (nieuw.length === 0) return;
     setBestanden(prev => [...prev, ...nieuw]);
 
     // Verwerk elk bestand
@@ -323,8 +339,32 @@ export default function ImportPage() {
           </div>
         </div>
 
-        {/* Drop zone — label ipv div+onClick zodat het op mobiel werkt */}
+        {/* Gratis limiet banner */}
+        {!proActief && (
+          <div className="bg-amber-900/20 border border-amber-700/40 rounded-xl px-4 py-3 flex items-center gap-3 mb-4">
+            <Lock size={16} className="text-amber-400 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-xs text-amber-300">
+                <strong>Gratis versie:</strong> max 1 PDF per keer.{' '}
+                <a href="/licentie" className="text-blue-400 hover:text-blue-300 underline">Upgrade naar Pro</a> voor meerdere bestanden tegelijk.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Drop zone — input buiten label, gekoppeld via htmlFor/id (iOS Safari fix) */}
+        <input
+          ref={fileInputRef}
+          id="pdf-file-input"
+          type="file"
+          accept=".pdf,application/pdf"
+          multiple
+          onChange={onFileChange}
+          className="hidden"
+          style={{ display: 'none' }}
+        />
         <label
+          htmlFor="pdf-file-input"
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
@@ -334,14 +374,6 @@ export default function ImportPage() {
               : 'border-slate-600 hover:border-slate-500 bg-slate-800/20 hover:bg-slate-800/40'
           }`}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,application/pdf"
-            multiple
-            onChange={onFileChange}
-            className="hidden"
-          />
           <Upload size={28} className="text-slate-500 mb-2" />
           <p className="text-slate-300 text-sm font-medium">Tik om bestanden te kiezen</p>
           <p className="text-slate-500 text-xs mt-1">Of sleep PDF's hierheen · meerdere bestanden tegelijk</p>
