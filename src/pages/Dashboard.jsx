@@ -87,16 +87,14 @@ export default function Dashboard() {
 
   // Laad gebruikersinstellingen eenmalig (niet bij elke render opnieuw)
   useEffect(() => {
-    if (!user?.uid) return;
-    getDoc(doc(db, `users/${user.uid}/instellingen/box3`)).then(snap => {
-      const data = snap.exists() ? snap.data() : {};
+    getInstellingen().then(data => {
+      const inst = data ? { ...data } : {};
       setInstellingen(prev => {
-        // Alleen updaten als de data echt veranderd is
-        if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
-        return data;
+        if (JSON.stringify(prev) === JSON.stringify(inst)) return prev;
+        return inst;
       });
     });
-  }, [user?.uid]);
+  }, []);
 
   // Bereken totalen door alle posities op te halen
   useEffect(() => {
