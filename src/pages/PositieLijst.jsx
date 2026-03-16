@@ -10,7 +10,7 @@ import { usePosities, useBank, useRekening } from '../hooks/useFirestore';
 import Breadcrumb from '../components/Breadcrumb';
 import { berekenPositieRendement, formatEuro, formatPct } from '../services/berekening';
 import { zoekAandeel, haalKoersenVoorJaar } from '../services/koersApi';
-import { Plus, Trash2, ChevronDown, ChevronUp, Search, TrendingUp, Edit3, Check, X, Loader, Calendar, Repeat } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Search, TrendingUp, Edit3, Check, X, Loader, Calendar, Repeat, Info } from 'lucide-react';
 
 const TYPES = ['aandeel', 'obligatie', 'etf', 'anders'];
 
@@ -57,6 +57,57 @@ function KoersZoeker({ onSelect }) {
             </button>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+
+// Ticker notatie info — popup in plaats van altijd-zichtbare lijst
+function TickerInfoPopup() {
+  const [open, setOpen] = useState(false);
+  const voorbeelden = [
+    { vlag: '🇳🇱', land: 'Nederland', suffix: '.AS', ex: 'ASML.AS' },
+    { vlag: '🇺🇸', land: 'Amerika',   suffix: '',    ex: 'AAPL, MSFT' },
+    { vlag: '🇩🇪', land: 'Duitsland', suffix: '.DE', ex: 'SAP.DE' },
+    { vlag: '🇫🇷', land: 'Frankrijk', suffix: '.PA', ex: 'MC.PA' },
+    { vlag: '🇬🇧', land: 'UK',        suffix: '.L',  ex: 'SHEL.L' },
+    { vlag: '📊',  land: 'ETF',       suffix: '.AS', ex: 'VWRL.AS' },
+  ];
+  return (
+    <div className="relative mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+      >
+        <Info className="w-3.5 h-3.5" />
+        Ticker notatie uitleg
+      </button>
+      {open && (
+        <>
+          {/* Klik buiten om te sluiten */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-6 z-20 w-64 bg-slate-800 border border-slate-600 rounded-xl shadow-xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-slate-300">💡 Ticker notatie per land</p>
+              <button onClick={() => setOpen(false)} className="text-slate-500 hover:text-slate-300">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {voorbeelden.map(({ vlag, land, suffix, ex }) => (
+                <div key={land} className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">{vlag} {land}{suffix ? ` (${suffix})` : ''}</span>
+                  <span className="text-xs font-mono text-slate-300">{ex}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-600 mt-2 pt-2 border-t border-slate-700">
+              Gebruik de zoekbalk hierboven om de juiste ticker te vinden.
+            </p>
+          </div>
+        </>
       )}
     </div>
   );
@@ -199,14 +250,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
           <input value={form.ticker} onChange={e => set('ticker', e.target.value)}
             placeholder="bijv. ASML.AS"
             className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <div className="mt-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 space-y-1">
-            <p className="text-xs font-medium text-slate-400">💡 Ticker notatie:</p>
-            <p className="text-xs text-slate-500">🇳🇱 Nederlandse aandelen: <span className="text-slate-300 font-mono">ASML.AS</span>, <span className="text-slate-300 font-mono">PHIA.AS</span></p>
-            <p className="text-xs text-slate-500">🇺🇸 Amerikaanse aandelen: <span className="text-slate-300 font-mono">AAPL</span>, <span className="text-slate-300 font-mono">MSFT</span></p>
-            <p className="text-xs text-slate-500">🇩🇪 Duitse aandelen: <span className="text-slate-300 font-mono">SAP.DE</span>, <span className="text-slate-300 font-mono">BMW.DE</span></p>
-            <p className="text-xs text-slate-500">🇫🇷 Franse aandelen: <span className="text-slate-300 font-mono">MC.PA</span>, <span className="text-slate-300 font-mono">AIR.PA</span></p>
-            <p className="text-xs text-slate-500">📊 ETF: <span className="text-slate-300 font-mono">VWRL.AS</span>, <span className="text-slate-300 font-mono">IWDA.AS</span></p>
-          </div>
+          <TickerInfoPopup />
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">ISIN</label>

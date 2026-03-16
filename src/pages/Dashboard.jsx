@@ -302,9 +302,43 @@ export default function Dashboard() {
 
       {/* Forfaitair vergelijk */}
       {totalen && (
-        <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-6 mb-8">
-          <h2 className="text-lg font-semibold text-white mb-4">Forfaitair vs Werkelijk Rendement</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 sm:p-6 mb-6 sm:mb-8">
+          <h2 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">Forfaitair vs Werkelijk</h2>
+
+          {/* Mobiel: compacte tabel-stijl */}
+          <div className="sm:hidden space-y-2">
+            <div className="flex items-center justify-between py-2 border-b border-slate-700/50">
+              <span className="text-xs text-slate-400">Forfaitair rendement ({formatPct(totalen.vergelijk.forfaitair.forfaitairPercentage)})</span>
+              <div className="text-right">
+                <span className="text-sm font-semibold text-white">{formatEuro(totalen.vergelijk.forfaitair.forfaitairRendement)}</span>
+                <span className="text-xs text-slate-500 ml-2">→ {formatEuro(totalen.vergelijk.forfaitair.belasting)}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between py-2 border-b border-slate-700/50">
+              <span className="text-xs text-slate-400">Werkelijk rendement</span>
+              <div className="text-right">
+                <span className="text-sm font-semibold text-white">{formatEuro(totalen.totaalRendement)}</span>
+                <span className="text-xs text-slate-500 ml-2">→ {formatEuro(totalen.vergelijk.werkelijk.belasting)}</span>
+              </div>
+            </div>
+            <div className={`flex items-center justify-between py-2 px-3 rounded-xl ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'bg-emerald-900/30' : 'bg-amber-900/30'}`}>
+              <span className="text-xs text-slate-400">Voordeligst</span>
+              <div className="text-right">
+                <span className={`text-sm font-bold ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? '✓ Werkelijk' : '✓ Forfaitair'}
+                </span>
+                <span className="text-xs text-slate-500 ml-2">-{formatEuro(totalen.vergelijk.voordeel)}</span>
+              </div>
+            </div>
+            {totalen.vergelijk.forfaitair.splitsing && (
+              <div className="text-xs text-slate-600 pt-1 space-y-0.5">
+                <p>Sparen {formatPct(totalen.vergelijk.forfaitair.splitsing.sparen.pct)} · Beleggen {formatPct(totalen.vergelijk.forfaitair.splitsing.beleggen.pct)} · Heffingsvrij {formatEuro(totalen.vergelijk.forfaitair.heffingsvrij)}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop: 3 blokken */}
+          <div className="hidden sm:grid sm:grid-cols-3 gap-6">
             <div className="bg-slate-900/50 rounded-xl p-4">
               <p className="text-sm text-slate-400 mb-1">Forfaitair rendement ({formatPct(totalen.vergelijk.forfaitair.forfaitairPercentage)})</p>
               <p className="text-xl font-bold text-white">{formatEuro(totalen.vergelijk.forfaitair.forfaitairRendement)}</p>
