@@ -216,33 +216,49 @@ export default function Dashboard() {
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 sm:mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-slate-400 mt-1">Overzicht belastingjaar {selectedYear}</p>
         </div>
-        <div className="flex gap-3">
+
+        {/* Knoppen: op mobiel 3 compacte icoon-knoppen naast elkaar, op desktop met tekst */}
+        <div className="flex gap-2 sm:gap-3">
+          {/* Kopieer knop */}
           <button
             onClick={handleKopieer}
             disabled={kopieerBezig}
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+            title={`Kopieer van ${selectedYear - 1}`}
+            className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 flex-1 sm:flex-none"
           >
-            <Copy className="w-4 h-4" />
-            {kopieerBezig ? 'Bezig...' : kopieerSuccess ? '✓ Gekopieerd!' : `Kopieer van ${selectedYear - 1}`}
+            <Copy className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden sm:inline">
+              {kopieerBezig ? 'Bezig...' : kopieerSuccess ? '✓ Gekopieerd!' : `Kopieer van ${selectedYear - 1}`}
+            </span>
+            <span className="sm:hidden text-xs">
+              {kopieerBezig ? '...' : kopieerSuccess ? '✓' : `${selectedYear - 1}`}
+            </span>
           </button>
+
+          {/* Instellingen knop */}
           <Link
             to="/instellingen"
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors"
+            title="Instellingen"
+            className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors flex-1 sm:flex-none"
           >
-            <Settings className="w-4 h-4" />
-            Instellingen
+            <Settings className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Instellingen</span>
           </Link>
+
+          {/* Beheer posities knop */}
           <Link
             to={`/jaar/${selectedYear}`}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-colors"
+            title="Beheer posities"
+            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors flex-1 sm:flex-none"
           >
-            <Building2 className="w-4 h-4" />
-            Beheer posities
+            <Building2 className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Beheer posities</span>
+            <span className="sm:hidden text-xs">Posities</span>
           </Link>
         </div>
       </div>
