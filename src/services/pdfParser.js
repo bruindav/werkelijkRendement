@@ -1,5 +1,6 @@
 // PDF Parser - volledig client-side met pdf.js
 // Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO, Evi (Van Lanschot)
+// Fix101 - ABN AMRO parser herschreven voor nieuw PDF-formaat 2025
 
 // ============ BEDRAG PARSER ============
 function parseBedrag(s) {
