@@ -62,11 +62,11 @@ function BankRij({ bank, year, onUpdate, onVerwijder, dragHandleProps }) {
           Bekijk <ArrowRight className="w-4 h-4" />
         </Link>
         <button onClick={() => setBewerken(true)}
-          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-blue-400 transition-all p-2">
+          className="text-slate-600 hover:text-blue-400 active:text-blue-400 transition-colors p-2 rounded-lg hover:bg-blue-950/40">
           <Edit3 className="w-4 h-4" />
         </button>
         <button onClick={() => onVerwijder(bank)}
-          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-2">
+          className="text-slate-600 hover:text-red-400 active:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-950/40">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>

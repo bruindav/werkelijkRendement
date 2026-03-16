@@ -346,7 +346,7 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
       <div className={`border rounded-2xl overflow-hidden transition-all ${
         open ? 'border-blue-600/40 bg-slate-800/60' : 'border-slate-700 bg-slate-800/40'
       }`}>
-        <div className="p-4 flex items-center gap-2 group">
+        <div className="p-4 flex items-center gap-2">
           <DragHandle dragHandleProps={dragHandleProps} />
           <Link to={`/jaar/${year}/bank/${bankId}/rekening/${rek.id}`} className="flex items-center gap-4 flex-1 min-w-0">
             <div className="w-11 h-11 bg-purple-600/20 border border-purple-600/30 rounded-xl flex items-center justify-center text-xl flex-shrink-0">📈</div>
@@ -359,14 +359,14 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
               <p className="text-xs text-slate-500 mt-0.5">Klik voor posities →</p>
             </div>
           </Link>
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-0.5 flex-shrink-0">
             <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
               title="Naam / instellingen bewerken"
-              className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-blue-400 transition-all p-2">
+              className="text-slate-600 hover:text-blue-400 active:text-blue-400 transition-colors p-2 rounded-lg hover:bg-blue-950/40">
               <Edit3 className="w-4 h-4" />
             </button>
             <button onClick={() => onVerwijder(rek)}
-              className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-2">
+              className="text-slate-600 hover:text-red-400 active:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-950/40">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
@@ -388,7 +388,7 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
       open ? 'border-blue-600/40 bg-slate-800/60' : 'border-slate-700 bg-slate-800/40'
     }`}>
       {/* Header rij — klik om te bewerken */}
-      <div className="p-4 flex items-start gap-2 group">
+      <div className="p-4 flex items-start gap-2">
         <DragHandle dragHandleProps={dragHandleProps} />
         <button onClick={() => setOpen(!open)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
           <div className={`w-11 h-11 bg-${info.kleur}-600/20 border border-${info.kleur}-600/30 rounded-xl flex items-center justify-center text-xl flex-shrink-0`}>
@@ -437,7 +437,8 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
           </div>
         </button>
         <button onClick={(e) => { e.stopPropagation(); onVerwijder(rek); }}
-          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-2 flex-shrink-0">
+          title="Verwijderen"
+          className="text-slate-600 hover:text-red-400 active:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-950/40 flex-shrink-0">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>

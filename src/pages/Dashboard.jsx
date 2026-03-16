@@ -324,17 +324,23 @@ export default function Dashboard() {
           {/* Mobiel: compacte tabel-stijl */}
           <div className="sm:hidden space-y-2">
             <div className="flex items-center justify-between py-2 border-b border-slate-700/50">
-              <span className="text-xs text-slate-400">Forfaitair rendement ({formatPct(totalen.vergelijk.forfaitair.forfaitairPercentage)})</span>
+              <div>
+                <p className="text-xs text-slate-400">Forfaitair rendement</p>
+                <p className="text-xs text-slate-600">{formatPct(totalen.vergelijk.forfaitair.forfaitairPercentage)} over belastbaar vermogen</p>
+              </div>
               <div className="text-right">
-                <span className="text-sm font-semibold text-white">{formatEuro(totalen.vergelijk.forfaitair.forfaitairRendement)}</span>
-                <span className="text-xs text-slate-500 ml-2">→ {formatEuro(totalen.vergelijk.forfaitair.belasting)}</span>
+                <p className="text-sm font-semibold text-white">{formatEuro(totalen.vergelijk.forfaitair.forfaitairRendement)}</p>
+                <p className="text-xs text-amber-500/80">belasting: {formatEuro(totalen.vergelijk.forfaitair.belasting)}</p>
               </div>
             </div>
             <div className="flex items-center justify-between py-2 border-b border-slate-700/50">
-              <span className="text-xs text-slate-400">Werkelijk rendement</span>
+              <div>
+                <p className="text-xs text-slate-400">Werkelijk rendement</p>
+                <p className="text-xs text-slate-600">werkelijk behaald dit jaar</p>
+              </div>
               <div className="text-right">
-                <span className="text-sm font-semibold text-white">{formatEuro(totalen.totaalRendement)}</span>
-                <span className="text-xs text-slate-500 ml-2">→ {formatEuro(totalen.vergelijk.werkelijk.belasting)}</span>
+                <p className="text-sm font-semibold text-white">{formatEuro(totalen.totaalRendement)}</p>
+                <p className="text-xs text-amber-500/80">belasting: {formatEuro(totalen.vergelijk.werkelijk.belasting)}</p>
               </div>
             </div>
             <div className={`flex items-center justify-between py-2 px-3 rounded-xl ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'bg-emerald-900/30' : 'bg-amber-900/30'}`}>
