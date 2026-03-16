@@ -143,22 +143,56 @@ function parseAbnAmro(text) {
   const jaarMatch = text.match(/Jaaroverzicht (\d{4})/i);
   const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
   const rekeningen = [];
-  const ibanPattern = /(NL\d{2}\s+[A-Z]{4}\s+[\d\s]+)\n(.+?)\n\s*([\d.,]+)\s+([\d.,]+)/gm;
-  for (const m of text.matchAll(ibanPattern)) {
-    const [, iban_raw, naam, saldo1, saldo2] = m;
-    const iban = iban_raw.replace(/\s/g, '');
-    if (!iban.startsWith('NL')) continue;
-    const naamClean = naam.trim();
-    if (naamClean.length < 2) continue;
+
+  // Na Y-grouping staat het formaat:
+  // "NL43 ABNA 0476 7127 85"  ← IBAN op eigen regel
+  // "354,30 1.361,15"          ← bedragen op volgende regel
+  // "Priverekening"            ← naam daarna
+  // Ook creditcard: nummer → bedragen → naam
+  const lines = text.split('\n');
+  const ibanPat = /^(NL\d{2}[\s]*[A-Z]{4}[\d\s]+|\d{8,})$/;
+  const bedragPat = /^-?[\d.,]+(?:\s+-?[\d.,]+)+$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!ibanPat.test(line)) continue;
+
+    const iban = line.replace(/\s/g, '');
+    let bedragen = [], naam = '';
+
+    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+      const volgende = lines[j].trim();
+      if (bedragPat.test(volgende)) {
+        bedragen = volgende.split(/\s+/).map(s => {
+          const neg = s.startsWith('-');
+          const v = parseFloat(s.replace('-','').replace(/\./g,'').replace(',','.')) || 0;
+          return neg ? -v : v;
+        });
+      } else if (volgende && !ibanPat.test(volgende) && !bedragPat.test(volgende)
+                 && volgende.length > 1 && !naam) {
+        naam = volgende;
+      }
+    }
+
+    if (!bedragen.length) continue;
+
+    // Sla header-regels over
+    const skipNamen = new Set(['Saldo', 'Betalen', 'sparen', 'Ontvangen', 'rente']);
+    if (skipNamen.has(naam)) continue;
+
     rekeningen.push({
-      naam: `${naamClean} (${iban})`,
-      weergave_naam: naamClean,
-      type: 'sparen', iban,
-      jan1_saldo: parseBedrag(saldo1),
-      dec31_saldo: parseBedrag(saldo2),
-      ontvangen_rente: 0, rente_pct: 0, kosten: 0, notitie: '',
+      naam: naam ? `${naam} (${iban})` : iban,
+      weergave_naam: naam || iban,
+      type: 'sparen',
+      iban,
+      rekeningnummer: iban,
+      jan1_saldo: bedragen[0] || 0,
+      dec31_saldo: bedragen[1] || 0,
+      ontvangen_rente: bedragen[2] || 0,
+      rente_pct: 0, kosten: 0, notitie: '',
     });
   }
+
   return { bank: 'ABN AMRO', jaar, rekeningen, type: 'abn_amro' };
 }
 
