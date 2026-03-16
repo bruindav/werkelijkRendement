@@ -1,3 +1,4 @@
+// Fix102 - Multi-file import — meerdere PDF bestanden tegelijk
 import { useState, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
@@ -5,33 +6,34 @@ import { importeerBank } from '../hooks/useLocalDB';
 import { parseerPDF, detectBankType } from '../services/pdfParser';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
-import { Upload, FileText, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Loader, X, ArrowRight } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader, X, ArrowRight, Check } from 'lucide-react';
 
-// ============ PDF TEKST EXTRACTOR (via pdf.js CDN) ============
+// ============ PDF TEKST EXTRACTOR ============
+async function laadPdfJs() {
+  if (window['pdfjs-dist/build/pdf']) return;
+  await new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
 async function extractPDFText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const pdfjsLib = window['pdfjs-dist/build/pdf'];
-        if (!pdfjsLib) {
-          reject(new Error('PDF.js niet geladen'));
-          return;
-        }
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
         const typedArray = new Uint8Array(e.target.result);
         const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
         let fullText = '';
-
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
-          
-          // 2-pass Y-grouping: verzamel eerst ALLE items, groepeer dan op Y.
-          // pdf.js geeft items soms niet in regel-volgorde, dus we sorteren zelf.
-          // transform[5] = bottom-up Y coordinaat (hogere waarde = hoger op pagina)
           const groepen = new Map();
           for (const item of content.items) {
             if (!item.str.trim()) continue;
@@ -40,289 +42,274 @@ async function extractPDFText(file) {
             if (!groepen.has(y)) groepen.set(y, []);
             groepen.get(y).push({ x, tekst: item.str });
           }
-          
-          // Sorteer Y-groepen: hoog y = hoog op pagina = eerste regel
           const gesorteerdeY = [...groepen.keys()].sort((a, b) => b - a);
           const regels = gesorteerdeY.map(y => {
             const items = groepen.get(y).sort((a, b) => a.x - b.x);
             return items.map(i => i.tekst).join(' ');
           });
-          
           fullText += regels.join('\n') + '\n';
         }
-
         resolve(fullText);
-      } catch (err) {
-        reject(err);
-      }
+      } catch (err) { reject(err); }
     };
     reader.onerror = () => reject(new Error('Bestand lezen mislukt'));
     reader.readAsArrayBuffer(file);
   });
 }
 
-// ============ BEDRAG FORMATTER ============
 const fmt = (n) => n == null ? '-' : `€ ${Number(n).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-// ============ REKENING PREVIEW KAART ============
-function RekeningKaart({ rec, index, geselecteerd, onToggle }) {
-  const typeKleur = rec.type === 'deposito'
-    ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-    : rec.type === 'beleggen'
-    ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+// ============ BESTAND KAART ============
+function BestandKaart({ item, onVerwijder, onToggleRekening, onJaarChange }) {
+  const { bestandsnaam, status, fout, resultaat, geselecteerd, importJaar } = item;
+
+  const statusKleur = {
+    laden: 'border-slate-700',
+    herkend: 'border-blue-600/40',
+    fout: 'border-red-700/40',
+    geimporteerd: 'border-emerald-700/40',
+  }[status] || 'border-slate-700';
+
+  const totaalRekeningen = resultaat?.meerdere_jaren
+    ? resultaat.jaren.length
+    : (resultaat?.rekeningen?.length || 0);
+  const aantalGeselecteerd = Object.values(geselecteerd).filter(Boolean).length;
 
   return (
-    <div className={`border rounded-xl transition-all ${geselecteerd
-      ? 'border-blue-500/60 bg-blue-950/30'
-      : 'border-slate-700 bg-slate-800/40 opacity-60'}`}>
-      <div className="p-3 flex items-start gap-3">
-        {/* Checkbox */}
-        <button
-          onClick={() => onToggle(index)}
-          className={`mt-0.5 w-5 h-5 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
-            geselecteerd ? 'bg-blue-600 border-blue-600' : 'border-slate-500 bg-transparent'
-          }`}
-        >
-          {geselecteerd && <CheckCircle size={12} className="text-white" />}
-        </button>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="text-white text-sm font-medium truncate">{rec.naam}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full border ${typeKleur}`}>{rec.type}</span>
-          </div>
-
-          {rec.posities && rec.posities.length > 0 ? (
-            // Evi-stijl: toon individuele fondsen
-            <div className="mt-2 space-y-1">
-              {rec.posities.map((pos, pi) => (
-                <div key={pi} className="flex justify-between text-xs bg-slate-900/60 rounded-lg px-3 py-1.5">
-                  <span className="text-slate-300 truncate mr-4">{pos.naam}</span>
-                  <div className="flex gap-3 flex-shrink-0 text-right">
-                    <span className="text-slate-400">{fmt(pos.jan1_waarde)}</span>
-                    <span className="text-white">→ {fmt(pos.dec31_waarde)}</span>
-                    {pos.dividend > 0 && <span className="text-emerald-400">div {fmt(pos.dividend)}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : rec.type === 'beleggen' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-xs">
-              <div className="bg-slate-900/60 rounded-lg p-2">
-                <div className="text-slate-400 mb-0.5">1 jan</div>
-                <div className="text-white font-medium">{fmt(rec.jan1_waarde)}</div>
-              </div>
-              <div className="bg-slate-900/60 rounded-lg p-2">
-                <div className="text-slate-400 mb-0.5">31 dec</div>
-                <div className="text-white font-medium">{fmt(rec.dec31_waarde)}</div>
-              </div>
-              <div className="bg-slate-900/60 rounded-lg p-2">
-                <div className="text-slate-400 mb-0.5">Aankopen</div>
-                <div className="text-white font-medium">{fmt(rec.aankopen_totaal)}</div>
-              </div>
-              <div className="bg-slate-900/60 rounded-lg p-2">
-                <div className="text-slate-400 mb-0.5">Dividend</div>
-                <div className="text-emerald-400 font-medium">{fmt(rec.dividend_totaal)}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 text-xs">
-              <div className="bg-slate-900/60 rounded-lg p-2">
-                <div className="text-slate-400 mb-0.5">Saldo 1 jan</div>
-                <div className="text-white font-medium">{fmt(rec.jan1_saldo)}</div>
-              </div>
-              <div className="bg-slate-900/60 rounded-lg p-2">
-                <div className="text-slate-400 mb-0.5">Saldo 31 dec</div>
-                <div className="text-white font-medium">{fmt(rec.dec31_saldo)}</div>
-              </div>
-              <div className="bg-slate-900/60 rounded-lg p-2">
-                <div className="text-slate-400 mb-0.5">Rente ontvangen</div>
-                <div className="text-emerald-400 font-medium">{fmt(rec.ontvangen_rente)}</div>
-              </div>
-            </div>
-          )}
-
-          {rec.rente_pct > 0 && (
-            <div className="mt-1 text-xs text-slate-400">
-              {rec.rente_pct}% p.j.
-              {rec.looptijd_maanden ? ` · ${rec.looptijd_maanden} maanden` : ''}
-              {rec.land ? ` · ${rec.land}` : ''}
-            </div>
-          )}
+    <div className={`border rounded-2xl overflow-hidden transition-all ${statusKleur} bg-slate-800/40`}>
+      {/* Header */}
+      <div className="p-4 flex items-center gap-3">
+        <div className="flex-shrink-0">
+          {status === 'laden' && <Loader size={18} className="text-slate-400 animate-spin" />}
+          {status === 'herkend' && <FileText size={18} className="text-blue-400" />}
+          {status === 'fout' && <AlertCircle size={18} className="text-red-400" />}
+          {status === 'geimporteerd' && <CheckCircle size={18} className="text-emerald-400" />}
         </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-white truncate">{bestandsnaam}</p>
+          {status === 'laden' && <p className="text-xs text-slate-500">Verwerken...</p>}
+          {status === 'herkend' && resultaat && (
+            <p className="text-xs text-slate-400">
+              {resultaat.bank} · {resultaat.meerdere_jaren ? `${totaalRekeningen} jaren` : `${totaalRekeningen} rekening(en)`}
+              {resultaat.jaar ? ` · ${resultaat.jaar}` : ''}
+            </p>
+          )}
+          {status === 'fout' && <p className="text-xs text-red-400">{fout}</p>}
+          {status === 'geimporteerd' && <p className="text-xs text-emerald-400">Geïmporteerd ✓</p>}
+        </div>
+        {status !== 'laden' && status !== 'geimporteerd' && (
+          <button onClick={onVerwijder} className="text-slate-500 hover:text-red-400 p-1 flex-shrink-0">
+            <X size={16} />
+          </button>
+        )}
       </div>
+
+      {/* Rekeningen + jaar selector */}
+      {status === 'herkend' && resultaat && (
+        <div className="border-t border-slate-700 px-4 pb-4 pt-3 space-y-3">
+          {/* Jaar */}
+          {!resultaat.meerdere_jaren && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-400 whitespace-nowrap">Importeer als jaar:</label>
+              <select value={importJaar} onChange={e => onJaarChange(parseInt(e.target.value))}
+                className="bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+                {[2021,2022,2023,2024,2025,2026].map(j => <option key={j} value={j}>{j}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Rekeningen checkboxen */}
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {resultaat.meerdere_jaren
+              ? resultaat.jaren.map((j, i) => (
+                <label key={i} className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" checked={!!geselecteerd[i]}
+                    onChange={() => onToggleRekening(i)}
+                    className="rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-0" />
+                  <span className="text-xs text-slate-300 group-hover:text-white">
+                    {j.jaar} — {j.rekening.naam}
+                  </span>
+                </label>
+              ))
+              : resultaat.rekeningen.map((rec, i) => (
+                <label key={i} className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox" checked={!!geselecteerd[i]}
+                    onChange={() => onToggleRekening(i)}
+                    className="rounded border-slate-600 bg-slate-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-0" />
+                  <span className="text-xs text-slate-300 group-hover:text-white truncate">
+                    {rec.naam}
+                    {rec.type && <span className="ml-1 text-slate-500">({rec.type})</span>}
+                  </span>
+                  {rec.jan1_saldo > 0 && (
+                    <span className="text-xs text-slate-500 ml-auto flex-shrink-0">{fmt(rec.jan1_saldo)}</span>
+                  )}
+                </label>
+              ))
+            }
+          </div>
+          <p className="text-xs text-slate-500">{aantalGeselecteerd} van {totaalRekeningen} geselecteerd</p>
+        </div>
+      )}
     </div>
   );
 }
 
 // ============ HOOFD COMPONENT ============
 export default function ImportPage() {
-  const { user } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef();
-
-  const [stap, setStap] = useState('upload'); // upload | preview | importeren | klaar
-  const [bezig, setBezig] = useState(false);
-  const [fout, setFout] = useState('');
-  const [parseResultaat, setParseResultaat] = useState(null);
-  const [geselecteerd, setGeselecteerd] = useState({});
-  const [importJaar, setImportJaar] = useState(new Date().getFullYear() - 1);
-  const [voortgang, setVoortgang] = useState({ gedaan: 0, totaal: 0, huidig: '' });
-  const [geimporteerd, setGeimporteerd] = useState(null);
+  const [bestanden, setBestanden] = useState([]); // array van { id, bestandsnaam, file, status, resultaat, geselecteerd, importJaar, fout }
+  const [importStatus, setImportStatus] = useState(null); // null | 'bezig' | 'klaar'
+  const [importResultaat, setImportResultaat] = useState(null);
   const [dragOver, setDragOver] = useState(false);
 
-  // ============ PDF LADEN ============
-  const verwerkBestand = async (file) => {
-    if (!file || file.type !== 'application/pdf') {
-      setFout('Selecteer een PDF-bestand.');
-      return;
+  const defaultJaar = () => {
+    const nu = new Date();
+    return nu.getMonth() >= 5 ? nu.getFullYear() : nu.getFullYear() - 1;
+  };
+
+  // ============ VERWERK BESTANDEN ============
+  const verwerkBestanden = async (files) => {
+    await laadPdfJs();
+
+    const nieuw = Array.from(files)
+      .filter(f => f.type === 'application/pdf')
+      .map(f => ({
+        id: Math.random().toString(36).slice(2),
+        bestandsnaam: f.name,
+        file: f,
+        status: 'laden',
+        resultaat: null,
+        geselecteerd: {},
+        importJaar: defaultJaar(),
+        fout: '',
+      }));
+
+    if (nieuw.length === 0) return;
+
+    setBestanden(prev => [...prev, ...nieuw]);
+
+    // Verwerk elk bestand
+    for (const item of nieuw) {
+      try {
+        const tekst = await extractPDFText(item.file);
+        const resultaat = parseerPDF(tekst);
+
+        if (resultaat.type === 'onbekend') {
+          setBestanden(prev => prev.map(b => b.id === item.id
+            ? { ...b, status: 'fout', fout: resultaat.fout || 'Bank niet herkend' }
+            : b));
+          continue;
+        }
+
+        // Init jaar en selectie
+        let jaar = defaultJaar();
+        if (resultaat.meerdere_jaren) {
+          jaar = resultaat.jaren[resultaat.jaren.length - 1]?.jaar || jaar;
+        } else if (resultaat.jaar) {
+          jaar = resultaat.jaar;
+        }
+
+        const initSel = {};
+        const n = resultaat.meerdere_jaren ? resultaat.jaren.length : (resultaat.rekeningen?.length || 0);
+        for (let i = 0; i < n; i++) initSel[i] = true;
+
+        setBestanden(prev => prev.map(b => b.id === item.id
+          ? { ...b, status: 'herkend', resultaat, geselecteerd: initSel, importJaar: jaar }
+          : b));
+      } catch (err) {
+        setBestanden(prev => prev.map(b => b.id === item.id
+          ? { ...b, status: 'fout', fout: err.message }
+          : b));
+      }
     }
-
-    setBezig(true);
-    setFout('');
-    setParseResultaat(null);
-
-    try {
-      // Laad pdf.js dynamisch
-      if (!window['pdfjs-dist/build/pdf']) {
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-          script.onload = resolve;
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-      }
-
-      const tekst = await extractPDFText(file);
-      // parseerPDF herkent alle banken inclusief Evi (na Y-grouping werkt alles tekst-gebaseerd)
-      const resultaat = parseerPDF(tekst);
-
-      if (resultaat.type === 'onbekend') {
-        setFout(resultaat.fout || 'Bank niet herkend in dit PDF-bestand.');
-        setBezig(false);
-        return;
-      }
-
-      // Bij meerdere jaren (CB Beleggen): gebruik het eerste jaar als startpunt
-      if (resultaat.meerdere_jaren) {
-        const jarenNummers = resultaat.jaren.map(j => j.jaar);
-        setImportJaar(jarenNummers[jarenNummers.length - 1] || importJaar);
-      } else if (resultaat.jaar) {
-        setImportJaar(resultaat.jaar);
-      }
-
-      // Initialiseer selectie (alles aan)
-      const initSel = {};
-      if (resultaat.meerdere_jaren) {
-        resultaat.jaren.forEach((j, i) => { initSel[i] = true; });
-      } else {
-        (resultaat.rekeningen || []).forEach((_, i) => { initSel[i] = true; });
-      }
-      setGeselecteerd(initSel);
-      setParseResultaat(resultaat);
-      setStap('preview');
-    } catch (err) {
-      setFout(`Fout bij verwerken: ${err.message}`);
-    }
-
-    setBezig(false);
   };
 
   const onFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) verwerkBestand(file);
+    if (e.target.files?.length) verwerkBestanden(e.target.files);
+    e.target.value = '';
   };
 
   const onDrop = useCallback((e) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) verwerkBestand(file);
+    if (e.dataTransfer.files?.length) verwerkBestanden(e.dataTransfer.files);
   }, []);
 
-  const toggleRekening = (i) => {
-    setGeselecteerd(prev => ({ ...prev, [i]: !prev[i] }));
+  const verwijderBestand = (id) => setBestanden(prev => prev.filter(b => b.id !== id));
+
+  const toggleRekening = (id, idx) => {
+    setBestanden(prev => prev.map(b => b.id === id
+      ? { ...b, geselecteerd: { ...b.geselecteerd, [idx]: !b.geselecteerd[idx] } }
+      : b));
   };
 
-  const selecteerAlles = () => {
-    const n = parseResultaat.meerdere_jaren
-      ? parseResultaat.jaren.length
-      : parseResultaat.rekeningen.length;
-    const nieuweStaat = {};
-    for (let i = 0; i < n; i++) nieuweStaat[i] = true;
-    setGeselecteerd(nieuweStaat);
+  const setJaar = (id, jaar) => {
+    setBestanden(prev => prev.map(b => b.id === id ? { ...b, importJaar: jaar } : b));
   };
 
-  const deselecteerAlles = () => setGeselecteerd({});
-
-  // ============ IMPORT NAAR FIRESTORE ============
+  // ============ IMPORTEER ALLES ============
   const doImport = async () => {
-    setStap('importeren');
-    setFout('');
-    let totaalGedaan = 0;
-    let totaalItems = 0;
-    let aangemaakteRekeningen = 0;
+    setImportStatus('bezig');
+    let totaal = 0;
 
-    try {
-      if (parseResultaat.meerdere_jaren) {
-        // CB Beleggen: elk geselecteerd jaar afzonderlijk importeren
-        const geselecteerdeJaren = parseResultaat.jaren.filter((_, i) => geselecteerd[i]);
-        totaalItems = geselecteerdeJaren.length;
+    for (const item of bestanden) {
+      if (item.status !== 'herkend' || !item.resultaat) continue;
+      const { resultaat, geselecteerd, importJaar } = item;
 
-        for (const { jaar, rekening } of geselecteerdeJaren) {
-          setVoortgang({ gedaan: totaalGedaan, totaal: totaalItems, huidig: `${jaar} - ${rekening.naam}` });
-          await importeerBank(jaar, { naam: parseResultaat.bank }, [rekening]);
-          totaalGedaan++;
-          aangemaakteRekeningen++;
-        }
-      } else {
-        const geselRekeningen = parseResultaat.rekeningen.filter((_, i) => geselecteerd[i]);
-        totaalItems = geselRekeningen.length;
-
-        // Bij Raisin: groepeer per partnerbank
-        if (parseResultaat.type === 'raisin') {
+      try {
+        if (resultaat.meerdere_jaren) {
+          const geselecteerdeJaren = resultaat.jaren.filter((_, i) => geselecteerd[i]);
+          for (const { jaar, rekening } of geselecteerdeJaren) {
+            await importeerBank(jaar, { naam: resultaat.bank }, [rekening]);
+            totaal++;
+          }
+        } else if (resultaat.type === 'raisin') {
           const groepen = {};
-          for (const rec of geselRekeningen) {
+          resultaat.rekeningen.forEach((rec, i) => {
+            if (!geselecteerd[i]) return;
             const bankNaam = rec.bank_naam || 'Raisin';
             if (!groepen[bankNaam]) groepen[bankNaam] = [];
             groepen[bankNaam].push(rec);
-          }
+          });
           for (const [bankNaam, recs] of Object.entries(groepen)) {
-            setVoortgang({ gedaan: totaalGedaan, totaal: totaalItems, huidig: `Raisin – ${bankNaam}` });
             await importeerBank(importJaar, { naam: `Raisin – ${bankNaam}` }, recs);
-            totaalGedaan += recs.length;
-            aangemaakteRekeningen += recs.length;
+            totaal += recs.length;
           }
         } else {
-          setVoortgang({ gedaan: totaalGedaan, totaal: totaalItems, huidig: parseResultaat.bank });
-          await importeerBank(importJaar, { naam: parseResultaat.bank }, geselRekeningen);
-          totaalGedaan += geselRekeningen.length;
-          aangemaakteRekeningen += geselRekeningen.length;
+          const geselRekeningen = resultaat.rekeningen.filter((_, i) => geselecteerd[i]);
+          if (geselRekeningen.length > 0) {
+            await importeerBank(importJaar, { naam: resultaat.bank }, geselRekeningen);
+            totaal += geselRekeningen.length;
+          }
         }
-      }
 
-      setVoortgang({ gedaan: totaalItems, totaal: totaalItems, huidig: 'Klaar!' });
-      setGeimporteerd({ jaar: importJaar, aantal: aangemaakteRekeningen });
-      setStap('klaar');
-    } catch (err) {
-      setFout(`Import mislukt: ${err.message}`);
-      setStap('preview');
+        setBestanden(prev => prev.map(b => b.id === item.id ? { ...b, status: 'geimporteerd' } : b));
+      } catch (err) {
+        setBestanden(prev => prev.map(b => b.id === item.id
+          ? { ...b, status: 'fout', fout: `Import mislukt: ${err.message}` }
+          : b));
+      }
     }
+
+    setImportResultaat({ totaal });
+    setImportStatus('klaar');
   };
 
+  const resetAlles = () => {
+    setBestanden([]);
+    setImportStatus(null);
+    setImportResultaat(null);
+  };
 
-  // ============ RENDER ============
-  const aantalGeselecteerd = Object.values(geselecteerd).filter(Boolean).length;
-  const totaalRekeningen = parseResultaat?.meerdere_jaren
-    ? parseResultaat.jaren.length
-    : (parseResultaat?.rekeningen?.length || 0);
+  const aantalKlaar = bestanden.filter(b => b.status === 'herkend').length;
+  const aantalGeselecteerd = bestanden
+    .filter(b => b.status === 'herkend')
+    .reduce((sum, b) => sum + Object.values(b.geselecteerd).filter(Boolean).length, 0);
 
   return (
-    <Layout user={user}>
-      <div className="max-w-3xl mx-auto">
+    <Layout>
+      <div className="max-w-2xl">
         <Breadcrumb items={[{ label: 'Importeren' }]} />
 
         <div className="flex items-center gap-3 mb-6">
@@ -330,199 +317,82 @@ export default function ImportPage() {
             <Upload size={20} className="text-blue-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">Jaaroverzicht importeren</h1>
-            <p className="text-sm text-slate-400">Upload een PDF van Centraal Beheer, Raisin of ABN AMRO</p>
+            <h1 className="text-xl font-bold text-white">Jaaroverzichten importeren</h1>
+            <p className="text-sm text-slate-400">Upload meerdere PDF's tegelijk — Centraal Beheer, Raisin, DEGIRO, Evi, ABN AMRO, Meewind, Collin</p>
           </div>
         </div>
 
-        {/* Foutmelding */}
-        {fout && (
-          <div className="mb-4 bg-red-900/30 border border-red-700/50 rounded-xl p-4 flex gap-3">
-            <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-red-300">{fout}</div>
+        {/* Drop zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all mb-4 ${
+            dragOver
+              ? 'border-blue-500 bg-blue-950/40'
+              : 'border-slate-600 hover:border-slate-500 bg-slate-800/20 hover:bg-slate-800/40'
+          }`}
+        >
+          <input ref={fileInputRef} type="file" accept=".pdf" multiple onChange={onFileChange} className="hidden" />
+          <Upload size={28} className="text-slate-500 mx-auto mb-2" />
+          <p className="text-slate-300 text-sm font-medium">Sleep PDF's hierheen of klik om te kiezen</p>
+          <p className="text-slate-500 text-xs mt-1">Meerdere bestanden tegelijk mogelijk</p>
+        </div>
+
+        {/* Bestandenlijst */}
+        {bestanden.length > 0 && (
+          <div className="space-y-3 mb-4">
+            {bestanden.map(item => (
+              <BestandKaart
+                key={item.id}
+                item={item}
+                onVerwijder={() => verwijderBestand(item.id)}
+                onToggleRekening={(idx) => toggleRekening(item.id, idx)}
+                onJaarChange={(jaar) => setJaar(item.id, jaar)}
+              />
+            ))}
           </div>
         )}
 
-        {/* STAP 1: UPLOAD */}
-        {stap === 'upload' && (
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={onDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all ${
-              dragOver
-                ? 'border-blue-500 bg-blue-950/40'
-                : 'border-slate-600 hover:border-slate-500 bg-slate-800/20 hover:bg-slate-800/40'
-            }`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={onFileChange}
-              className="hidden"
-            />
-            {bezig ? (
-              <div className="flex flex-col items-center gap-3">
-                <Loader size={40} className="text-blue-400 animate-spin" />
-                <p className="text-slate-300">PDF verwerken...</p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-slate-700/60 rounded-2xl flex items-center justify-center">
-                  <FileText size={32} className="text-slate-400" />
-                </div>
-                <div>
-                  <p className="text-white font-medium mb-1">Sleep PDF hierheen of klik om te kiezen</p>
-                  <p className="text-slate-400 text-sm">Ondersteunde banken: Centraal Beheer · Raisin · ABN AMRO</p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* STAP 2: PREVIEW */}
-        {stap === 'preview' && parseResultaat && (
-          <div className="space-y-4">
-            {/* Bank badge + jaar selector */}
-            <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span className="text-white font-semibold">{parseResultaat.bank}</span>
-                  <span className="text-xs bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full">
-                    ✓ Herkend
-                  </span>
-                  {parseResultaat.meerdere_jaren && (
-                    <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full">
-                      Meerdere jaren
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-slate-400">
-                  {aantalGeselecteerd} van {totaalRekeningen} {parseResultaat.meerdere_jaren ? 'jaren' : 'rekeningen'} geselecteerd
-                </p>
-              </div>
-
-              {!parseResultaat.meerdere_jaren && (
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-slate-400 whitespace-nowrap">Importeer als jaar:</label>
-                  <select
-                    value={importJaar}
-                    onChange={e => setImportJaar(parseInt(e.target.value))}
-                    className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {[2021, 2022, 2023, 2024, 2025, 2026].map(j => (
-                      <option key={j} value={j}>{j}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* Selecteer alles / geen */}
-            <div className="flex items-center gap-3">
-              <button onClick={selecteerAlles} className="text-xs text-blue-400 hover:text-blue-300">Alles selecteren</button>
-              <span className="text-slate-600">·</span>
-              <button onClick={deselecteerAlles} className="text-xs text-slate-400 hover:text-slate-300">Geen</button>
-              <button
-                onClick={() => { setStap('upload'); setParseResultaat(null); setFout(''); }}
-                className="ml-auto text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1"
-              >
-                <X size={12} /> Ander bestand
-              </button>
-            </div>
-
-            {/* Rekeningen lijst */}
-            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
-              {parseResultaat.meerdere_jaren ? (
-                parseResultaat.jaren.map((j, i) => (
-                  <RekeningKaart
-                    key={i}
-                    rec={{ ...j.rekening, naam: `${j.jaar} – ${j.rekening.naam}` }}
-                    index={i}
-                    geselecteerd={!!geselecteerd[i]}
-                    onToggle={toggleRekening}
-                  />
-                ))
-              ) : (
-                parseResultaat.rekeningen.map((rec, i) => (
-                  <RekeningKaart
-                    key={i}
-                    rec={rec}
-                    index={i}
-                    geselecteerd={!!geselecteerd[i]}
-                    onToggle={toggleRekening}
-                  />
-                ))
-              )}
-            </div>
-
-            {/* Import knop */}
-            <div className="pt-2">
-              <button
-                onClick={doImport}
-                disabled={aantalGeselecteerd === 0}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl px-6 py-3 font-medium transition-colors"
-              >
-                <ArrowRight size={18} />
-                {aantalGeselecteerd} {parseResultaat.meerdere_jaren ? 'jaar' : 'rekening(en)'} importeren
-                {!parseResultaat.meerdere_jaren && ` (${importJaar})`}
-              </button>
-              <p className="text-xs text-slate-500 mt-2">
-                Er wordt een nieuwe bank aangemaakt in je overzicht voor {parseResultaat.meerdere_jaren ? 'elk geselecteerd jaar' : `jaar ${importJaar}`}.
+        {/* Actie balk */}
+        {aantalKlaar > 0 && importStatus !== 'klaar' && (
+          <div className="flex items-center gap-3 p-4 bg-slate-800/60 border border-slate-700 rounded-2xl">
+            <div className="flex-1">
+              <p className="text-sm text-white">
+                {aantalGeselecteerd} rekening(en) uit {aantalKlaar} bestand(en) klaar om te importeren
               </p>
             </div>
+            <button
+              onClick={doImport}
+              disabled={aantalGeselecteerd === 0 || importStatus === 'bezig'}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl px-5 py-2.5 text-sm font-medium flex-shrink-0"
+            >
+              {importStatus === 'bezig'
+                ? <><Loader size={16} className="animate-spin" /> Bezig...</>
+                : <><ArrowRight size={16} /> Alles importeren</>}
+            </button>
           </div>
         )}
 
-        {/* STAP 3: BEZIG MET IMPORTEREN */}
-        {stap === 'importeren' && (
-          <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-8 text-center">
-            <Loader size={40} className="text-blue-400 animate-spin mx-auto mb-4" />
-            <p className="text-white font-medium mb-2">Importeren...</p>
-            {voortgang.totaal > 0 && (
-              <>
-                <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
-                  <div
-                    className="bg-blue-500 h-2 rounded-full transition-all"
-                    style={{ width: `${(voortgang.gedaan / voortgang.totaal) * 100}%` }}
-                  />
-                </div>
-                <p className="text-sm text-slate-400 truncate">{voortgang.huidig}</p>
-                <p className="text-xs text-slate-500 mt-1">{voortgang.gedaan} / {voortgang.totaal}</p>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* STAP 4: KLAAR */}
-        {stap === 'klaar' && geimporteerd && (
-          <div className="bg-slate-800/40 border border-green-700/40 rounded-2xl p-8 text-center">
-            <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle size={32} className="text-green-400" />
+        {/* Klaar */}
+        {importStatus === 'klaar' && importResultaat && (
+          <div className="p-5 bg-emerald-900/20 border border-emerald-700/30 rounded-2xl">
+            <div className="flex items-center gap-3 mb-3">
+              <CheckCircle size={20} className="text-emerald-400" />
+              <p className="text-white font-medium">Import geslaagd!</p>
             </div>
-            <h2 className="text-white text-xl font-bold mb-2">Import geslaagd!</h2>
-            <p className="text-slate-300 mb-1">
-              <span className="text-white font-semibold">{geimporteerd.aantal} rekening(en)</span> geïmporteerd
+            <p className="text-sm text-emerald-300/80 mb-4">
+              {importResultaat.totaal} rekening(en) geïmporteerd.
             </p>
-            <p className="text-slate-400 text-sm mb-6">
-              Je vindt de gegevens nu terug in je jaaroverzicht.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
-                onClick={() => navigate(`/jaar/${geimporteerd.jaar}`)}
-                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-6 py-2.5 font-medium"
-              >
-                <ArrowRight size={16} />
-                Ga naar {geimporteerd.jaar}
+            <div className="flex gap-3">
+              <button onClick={() => navigate('/dashboard')}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2 text-sm font-medium">
+                <ArrowRight size={16} /> Naar dashboard
               </button>
-              <button
-                onClick={() => { setStap('upload'); setParseResultaat(null); setGeimporteerd(null); setFout(''); }}
-                className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl px-6 py-2.5 text-sm"
-              >
-                <Upload size={16} />
-                Nog een PDF importeren
+              <button onClick={resetAlles}
+                className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl px-4 py-2 text-sm">
+                <Upload size={16} /> Meer importeren
               </button>
             </div>
           </div>
