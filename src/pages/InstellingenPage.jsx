@@ -1,12 +1,13 @@
 // Instellingen — Box 3 tarieven, heffingsvrij vermogen, partner
 import { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useApp } from '../context/AppContext';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
-import { Settings, Save, RotateCcw, Check, Users, User } from 'lucide-react';
+import { Settings, Save, RotateCcw, Check, Users, User, Copy, ArrowRight, AlertTriangle, Loader, ChevronDown } from 'lucide-react';
 import { FORFAITAIR_TARIEVEN, HEFFINGSVRIJ_VERMOGEN } from '../services/berekening';
+import { kopieerJaar, controleerJaarLeeg } from '../hooks/useFirestore';
 
 const JAREN = [2021, 2022, 2023, 2024, 2025, 2026];
 
@@ -28,6 +29,13 @@ export default function InstellingenPage() {
   const [loading, setLoading] = useState(true);
   const [opgeslagen, setOpgeslagen] = useState(false);
   const [selectedJaar, setSelectedJaar] = useState(new Date().getFullYear());
+  const [activeTab, setActiveTab] = useState('tarieven'); // 'tarieven' | 'kopieren'
+
+  // Kopiëren state
+  const [vanJaar, setVanJaar] = useState(new Date().getFullYear() - 1);
+  const [naarJaar, setNaarJaar] = useState(new Date().getFullYear());
+  const [kopieerStatus, setKopieerStatus] = useState(null); // null | 'checking' | 'leeg' | 'bezet' | 'bezig' | 'klaar' | 'fout'
+  const [kopieerFout, setKopieerFout] = useState('');
 
   // Laad instellingen
   useEffect(() => {
@@ -72,6 +80,29 @@ export default function InstellingenPage() {
     }));
   };
 
+  const handleKopieerCheck = async () => {
+    setKopieerStatus('checking');
+    setKopieerFout('');
+    try {
+      const leeg = await controleerJaarLeeg(user.uid, naarJaar);
+      setKopieerStatus(leeg ? 'leeg' : 'bezet');
+    } catch (err) {
+      setKopieerStatus('fout');
+      setKopieerFout(err.message);
+    }
+  };
+
+  const handleKopieer = async () => {
+    setKopieerStatus('bezig');
+    try {
+      await kopieerJaar(user.uid, vanJaar, naarJaar);
+      setKopieerStatus('klaar');
+    } catch (err) {
+      setKopieerStatus('fout');
+      setKopieerFout(err.message);
+    }
+  };
+
   if (loading || !instellingen) {
     return <div className="animate-pulse h-64 bg-slate-800 rounded-2xl" />;
   }
@@ -102,10 +133,29 @@ export default function InstellingenPage() {
           <Settings size={20} className="text-slate-300" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white">Instellingen Box 3</h1>
-          <p className="text-sm text-slate-400">Belastingtarieven, heffingsvrij vermogen en partnertoeslag</p>
+          <h1 className="text-xl font-bold text-white">Instellingen</h1>
+          <p className="text-sm text-slate-400">Tarieven, heffingsvrij vermogen en jaar kopiëren</p>
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-900/60 rounded-xl p-1 mb-6">
+        {[
+          { key: 'tarieven', label: 'Box 3 tarieven', icon: Settings },
+          { key: 'kopieren', label: 'Jaar kopiëren', icon: Copy },
+        ].map(({ key, label, icon: Icon }) => (
+          <button key={key} onClick={() => setActiveTab(key)}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === key ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}>
+            <Icon size={15} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: Tarieven */}
+      {activeTab === 'tarieven' && (<>
 
       {/* Partner instelling */}
       <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-5 mb-4">
@@ -284,6 +334,144 @@ export default function InstellingenPage() {
         {opgeslagen ? <Check size={18} /> : <Save size={18} />}
         {opgeslagen ? 'Opgeslagen!' : 'Instellingen opslaan'}
       </button>
+      </>)}
+
+      {/* Tab: Kopiëren */}
+      {activeTab === 'kopieren' && (
+        <div className="space-y-4">
+          <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-5">
+            <h2 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
+              <Copy size={16} className="text-blue-400" /> Jaar kopiëren
+            </h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Kopieer banken, rekeningen en posities van het ene jaar naar het andere.
+              Beleggingsposities worden overgezet met de 31 dec waarden als nieuwe 1 jan waarden.
+              Spaar- en depositorekeningen worden gekopieerd met dezelfde instellingen.
+            </p>
+
+            {/* Van / Naar selectors */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-1">
+                <label className="block text-xs text-slate-400 mb-1">Van jaar</label>
+                <select value={vanJaar} onChange={e => { setVanJaar(parseInt(e.target.value)); setKopieerStatus(null); }}
+                  className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {[2021,2022,2023,2024,2025,2026].map(j => <option key={j} value={j}>{j}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end pb-2">
+                <ArrowRight size={18} className="text-slate-500" />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-slate-400 mb-1">Naar jaar</label>
+                <select value={naarJaar} onChange={e => { setNaarJaar(parseInt(e.target.value)); setKopieerStatus(null); }}
+                  className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  {[2021,2022,2023,2024,2025,2026].map(j => <option key={j} value={j}>{j}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {vanJaar === naarJaar && (
+              <p className="text-xs text-amber-400 mb-3">⚠️ Van- en naar-jaar zijn hetzelfde.</p>
+            )}
+
+            {/* Stap 1: Controleer knop */}
+            {kopieerStatus === null && vanJaar !== naarJaar && (
+              <button onClick={handleKopieerCheck}
+                className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl px-4 py-2.5 text-sm font-medium">
+                <Copy size={16} /> Controleer jaar {naarJaar}
+              </button>
+            )}
+
+            {/* Checking */}
+            {kopieerStatus === 'checking' && (
+              <div className="flex items-center gap-2 text-slate-400 text-sm">
+                <Loader size={16} className="animate-spin" /> Jaar {naarJaar} controleren...
+              </div>
+            )}
+
+            {/* Jaar is leeg — veilig kopiëren */}
+            {kopieerStatus === 'leeg' && (
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 bg-emerald-900/20 border border-emerald-700/30 rounded-xl px-4 py-3">
+                  <Check size={16} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-emerald-300">
+                    Jaar {naarJaar} is leeg — je kunt veilig kopiëren van {vanJaar}.
+                  </p>
+                </div>
+                <button onClick={handleKopieer}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-5 py-2.5 text-sm font-medium">
+                  <Copy size={16} /> Kopieer {vanJaar} → {naarJaar}
+                </button>
+              </div>
+            )}
+
+            {/* Jaar heeft al data — waarschuwing */}
+            {kopieerStatus === 'bezet' && (
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 bg-amber-900/20 border border-amber-700/40 rounded-xl px-4 py-3">
+                  <AlertTriangle size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-amber-300 font-medium">Jaar {naarJaar} heeft al gegevens</p>
+                    <p className="text-xs text-amber-400/70 mt-0.5">
+                      De gegevens van {vanJaar} worden toegevoegd naast de bestaande gegevens van {naarJaar}.
+                      Er wordt niets overschreven of verwijderd.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleKopieer}
+                    className="flex items-center gap-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-5 py-2.5 text-sm font-medium">
+                    <Copy size={16} /> Toch kopiëren naar {naarJaar}
+                  </button>
+                  <button onClick={() => setKopieerStatus(null)}
+                    className="text-slate-400 hover:text-white text-sm px-4 py-2.5">
+                    Annuleren
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Bezig */}
+            {kopieerStatus === 'bezig' && (
+              <div className="flex items-center gap-3 text-slate-300 text-sm">
+                <Loader size={18} className="animate-spin text-blue-400" />
+                Kopiëren van {vanJaar} naar {naarJaar}...
+              </div>
+            )}
+
+            {/* Klaar */}
+            {kopieerStatus === 'klaar' && (
+              <div className="flex items-start gap-2 bg-emerald-900/20 border border-emerald-700/30 rounded-xl px-4 py-3">
+                <Check size={16} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-emerald-300 font-medium">Gekopieerd!</p>
+                  <p className="text-xs text-emerald-400/70 mt-0.5">
+                    Banken en posities van {vanJaar} zijn toegevoegd aan {naarJaar}.
+                  </p>
+                  <button onClick={() => setKopieerStatus(null)}
+                    className="text-xs text-blue-400 hover:text-blue-300 mt-2">
+                    Nog een keer kopiëren
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Fout */}
+            {kopieerStatus === 'fout' && (
+              <div className="flex items-start gap-2 bg-red-900/20 border border-red-700/40 rounded-xl px-4 py-3">
+                <AlertTriangle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-red-300">Er ging iets mis</p>
+                  <p className="text-xs text-red-400/70 mt-0.5">{kopieerFout}</p>
+                  <button onClick={() => setKopieerStatus(null)} className="text-xs text-slate-400 hover:text-white mt-2">
+                    Opnieuw proberen
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
     </Layout>
   );

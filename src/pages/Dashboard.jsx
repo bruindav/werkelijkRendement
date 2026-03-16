@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useBanken, useRekeningen, kopieerJaar } from '../hooks/useFirestore';
+import { useBanken } from '../hooks/useFirestore';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
 import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { TrendingUp, TrendingDown, Building2, ArrowRight, Copy, AlertCircle, Settings } from 'lucide-react';
+import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
 
@@ -98,8 +98,6 @@ export default function Dashboard() {
       });
     });
   }, [user?.uid]);
-  const [kopieerBezig, setKopieerBezig] = useState(false);
-  const [kopieerSuccess, setKopieerSuccess] = useState(false);
 
   // Bereken totalen door alle posities op te halen
   useEffect(() => {
@@ -197,20 +195,6 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(','), instellingen]);
 
-  const handleKopieer = async () => {
-    const vanJaar = selectedYear - 1;
-    if (!window.confirm(`Gegevens van ${vanJaar} kopiëren naar ${selectedYear}? Bestaande gegevens van ${selectedYear} blijven behouden.`)) return;
-    setKopieerBezig(true);
-    try {
-      await kopieerJaar(user.uid, vanJaar, selectedYear);
-      setKopieerSuccess(true);
-      setTimeout(() => setKopieerSuccess(false), 3000);
-    } catch (err) {
-      alert('Kopiëren mislukt: ' + err.message);
-    }
-    setKopieerBezig(false);
-  };
-
   const rendementPositief = totalen?.totaalRendement >= 0;
 
   return (
@@ -222,45 +206,14 @@ export default function Dashboard() {
           <p className="text-slate-400 mt-1">Overzicht belastingjaar {selectedYear}</p>
         </div>
 
-        {/* Knoppen: op mobiel 3 compacte icoon-knoppen naast elkaar, op desktop met tekst */}
-        <div className="flex gap-2 sm:gap-3">
-          {/* Kopieer knop */}
-          <button
-            onClick={handleKopieer}
-            disabled={kopieerBezig}
-            title={`Kopieer van ${selectedYear - 1}`}
-            className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 flex-1 sm:flex-none"
-          >
-            <Copy className="w-4 h-4 flex-shrink-0" />
-            <span className="hidden sm:inline">
-              {kopieerBezig ? 'Bezig...' : kopieerSuccess ? '✓ Gekopieerd!' : `Kopieer van ${selectedYear - 1}`}
-            </span>
-            <span className="sm:hidden text-xs">
-              {kopieerBezig ? '...' : kopieerSuccess ? '✓' : `${selectedYear - 1}`}
-            </span>
-          </button>
-
-          {/* Instellingen knop */}
-          <Link
-            to="/instellingen"
-            title="Instellingen"
-            className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors flex-1 sm:flex-none"
-          >
-            <Settings className="w-4 h-4 flex-shrink-0" />
-            <span className="hidden sm:inline">Instellingen</span>
-          </Link>
-
-          {/* Beheer posities knop */}
-          <Link
+        <Link
             to={`/jaar/${selectedYear}`}
-            title="Beheer posities"
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors flex-1 sm:flex-none"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-colors"
           >
-            <Building2 className="w-4 h-4 flex-shrink-0" />
+            <Building2 className="w-4 h-4" />
             <span className="hidden sm:inline">Beheer posities</span>
-            <span className="sm:hidden text-xs">Posities</span>
+            <span className="sm:hidden">Posities</span>
           </Link>
-        </div>
       </div>
 
       {/* Stats — mobiel: compacte kaart, desktop: 4 blokken */}
@@ -311,7 +264,7 @@ export default function Dashboard() {
           <AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-3" />
           <p className="text-slate-400">Nog geen gegevens voor {selectedYear}.</p>
           <p className="text-slate-500 text-sm mt-1">
-            Voeg banken en posities toe, of kopieer gegevens van {selectedYear - 1}.
+            Voeg banken en posities toe via 'Posities', of kopieer gegevens via Instellingen → Kopiëren.
           </p>
         </div>
       )}
