@@ -1,4 +1,4 @@
-// AppContext — lokale versie zonder Firebase Auth
+// AppContext — lokale versie zonder Firebase Auth 
 // Gebruiker is altijd "ingelogd" — data staat lokaal op het apparaat
 import { createContext, useContext, useEffect, useState } from 'react';
 import { getProfiel, setProfiel } from '../services/localDb';
