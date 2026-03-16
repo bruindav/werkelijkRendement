@@ -292,65 +292,102 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
   );
 }
 
+
+// ============ INLINE EDIT HELPERS ============
+function NaamInlineEdit({ rek, onUpdate }) {
+  const [waarde, setWaarde] = useState(rek.naam);
+  const [bezig, setBezig] = useState(false);
+  return (
+    <div className="flex gap-1">
+      <input value={waarde} onChange={e => setWaarde(e.target.value)}
+        onBlur={async () => {
+          if (waarde !== rek.naam && waarde.trim()) {
+            setBezig(true);
+            await onUpdate(rek.id, { naam: waarde.trim() });
+            setBezig(false);
+          }
+        }}
+        className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      {bezig && <span className="text-slate-500 text-xs self-center">...</span>}
+    </div>
+  );
+}
+
+function RekeningnummerInlineEdit({ rek, onUpdate }) {
+  const [waarde, setWaarde] = useState(rek.rekeningnummer || '');
+  return (
+    <input value={waarde} onChange={e => setWaarde(e.target.value)}
+      onBlur={async () => { if (waarde !== (rek.rekeningnummer || '')) await onUpdate(rek.id, { rekeningnummer: waarde }); }}
+      placeholder="NL12 BANK 0123..."
+      className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+  );
+}
+
 // ============ REKENING RIJ ============
+// Eén klik opent het volledige formulier (naam + type + bedragen)
 function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps }) {
   const [open, setOpen] = useState(false);
-  const [bewerkenNaam, setBewerkenNaam] = useState(false);
   const info = typeInfo(rek.type);
 
-  const rendement = (rek.ontvangen_rente || 0) - (rek.kosten || 0);
   const heeftData = (rek.jan1_saldo || rek.dec31_saldo || rek.ontvangen_rente);
-
   const dagenTotEinde = rek.deposito_einddatum
     ? Math.ceil((new Date(rek.deposito_einddatum) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
 
-  if (bewerkenNaam) {
-    return (
-      <div className="mb-1">
-        <RekeningForm initial={rek}
-          onSave={async (data) => { await onUpdate(rek.id, data); setBewerkenNaam(false); }}
-          onCancel={() => setBewerkenNaam(false)} />
-      </div>
-    );
-  }
+  // Gecombineerde save: naam/type-velden + bedragen in één update
+  const handleSaveAlles = async (data) => {
+    await onUpdate(rek.id, data);
+    setOpen(false);
+  };
 
   if (rek.type === 'beleggen') {
-    // Beleggingsrekening: navigeert naar posities pagina
+    // Beleggingsrekening: klik → posities pagina, potlood → naam bewerken
     return (
-      <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 flex items-center gap-2 group">
-        <DragHandle dragHandleProps={dragHandleProps} />
-        <Link to={`/jaar/${year}/bank/${bankId}/rekening/${rek.id}`} className="flex items-center gap-4 flex-1 min-w-0">
-          <div className="w-11 h-11 bg-purple-600/20 border border-purple-600/30 rounded-xl flex items-center justify-center text-xl flex-shrink-0">📈</div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold text-white">{rek.naam}</p>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-900/40 text-purple-400">Beleggingsrekening</span>
+      <div className={`border rounded-2xl overflow-hidden transition-all ${
+        open ? 'border-blue-600/40 bg-slate-800/60' : 'border-slate-700 bg-slate-800/40'
+      }`}>
+        <div className="p-4 flex items-center gap-2 group">
+          <DragHandle dragHandleProps={dragHandleProps} />
+          <Link to={`/jaar/${year}/bank/${bankId}/rekening/${rek.id}`} className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="w-11 h-11 bg-purple-600/20 border border-purple-600/30 rounded-xl flex items-center justify-center text-xl flex-shrink-0">📈</div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-semibold text-white">{rek.naam}</p>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-900/40 text-purple-400">Beleggingsrekening</span>
+              </div>
+              {rek.rekeningnummer && <p className="text-xs text-slate-500 font-mono mt-0.5">{rek.rekeningnummer}</p>}
+              <p className="text-xs text-slate-500 mt-0.5">Klik voor posities →</p>
             </div>
-            {rek.rekeningnummer && <p className="text-xs text-slate-500 font-mono mt-0.5">{rek.rekeningnummer}</p>}
-            <p className="text-xs text-slate-500 mt-0.5">Klik voor posities →</p>
+          </Link>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+              title="Naam / instellingen bewerken"
+              className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-blue-400 transition-all p-2">
+              <Edit3 className="w-4 h-4" />
+            </button>
+            <button onClick={() => onVerwijder(rek)}
+              className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-2">
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
-        </Link>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={() => setBewerkenNaam(true)}
-            className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-blue-400 transition-all p-2">
-            <Edit3 className="w-4 h-4" />
-          </button>
-          <button onClick={() => onVerwijder(rek)}
-            className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-2">
-            <Trash2 className="w-4 h-4" />
-          </button>
         </div>
+        {open && (
+          <div className="border-t border-slate-700">
+            <RekeningForm initial={rek}
+              onSave={handleSaveAlles}
+              onCancel={() => setOpen(false)} />
+          </div>
+        )}
       </div>
     );
   }
 
-  // Spaar of deposito: inline uitklap
+  // Spaar of deposito: één klik opent gecombineerd formulier
   return (
     <div className={`border rounded-2xl overflow-hidden transition-all ${
       open ? 'border-blue-600/40 bg-slate-800/60' : 'border-slate-700 bg-slate-800/40'
     }`}>
-      {/* Header rij */}
+      {/* Header rij — klik om te bewerken */}
       <div className="p-4 flex items-start gap-2 group">
         <DragHandle dragHandleProps={dragHandleProps} />
         <button onClick={() => setOpen(!open)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
@@ -365,8 +402,6 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
               </span>
             </div>
             {rek.rekeningnummer && <p className="text-xs text-slate-500 font-mono mt-0.5">{rek.rekeningnummer}</p>}
-
-            {/* Samenvatting data als aanwezig */}
             {heeftData ? (
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-xs">
                 {rek.jan1_saldo > 0 && (
@@ -397,31 +432,57 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
               <p className="text-xs text-slate-500 mt-0.5">Klik om gegevens in te vullen</p>
             )}
           </div>
-          <div className="text-slate-500 flex-shrink-0 ml-2">
+          <div className="text-slate-500 flex-shrink-0 ml-2 mt-1">
             {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </div>
         </button>
-
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={(e) => { e.stopPropagation(); setBewerkenNaam(true); }}
-            className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-blue-400 transition-all p-2">
-            <Edit3 className="w-4 h-4" />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); onVerwijder(rek); }}
-            className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-2">
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
+        <button onClick={(e) => { e.stopPropagation(); onVerwijder(rek); }}
+          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-2 flex-shrink-0">
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Inline formulier */}
+      {/* Gecombineerd formulier: naam/type bovenin, bedragen eronder */}
       {open && (
-        <SpaarDepositoForm
-          rek={rek}
-          year={year}
-          onSave={async (data) => { await onUpdate(rek.id, data); setOpen(false); }}
-          onCancel={() => setOpen(false)}
-        />
+        <>
+          {/* Naam/type/rekeningnummer sectie */}
+          <div className="border-t border-slate-700 bg-slate-900/40 px-4 pt-4 pb-2">
+            <p className="text-xs font-medium text-slate-400 mb-3 uppercase tracking-wide">🏷️ Rekening</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Naam</label>
+                <NaamInlineEdit rek={rek} onUpdate={onUpdate} />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Rekeningnummer / IBAN</label>
+                <RekeningnummerInlineEdit rek={rek} onUpdate={onUpdate} />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Type</label>
+                <div className="flex gap-1">
+                  {REKENING_TYPES.filter(t => t.value !== 'beleggen').map(t => (
+                    <button key={t.value}
+                      onClick={() => onUpdate(rek.id, { type: t.value })}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium transition-colors text-center ${
+                        rek.type === t.value
+                          ? `bg-${t.kleur}-600/30 border border-${t.kleur}-500/50 text-${t.kleur}-300`
+                          : 'bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700'
+                      }`}>
+                      {t.emoji} {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Bedragen/rente sectie */}
+          <SpaarDepositoForm
+            rek={rek}
+            year={year}
+            onSave={async (data) => { await onUpdate(rek.id, data); setOpen(false); }}
+            onCancel={() => setOpen(false)}
+          />
+        </>
       )}
     </div>
   );
