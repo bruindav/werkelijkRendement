@@ -1,8 +1,9 @@
+// Fix103b - Secundaire nav items (Help + Privacy) correct gerenderd in sidebar
 // Fix 10 - Jaar switchen navigeert mee
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, HelpCircle, Lock, LogOut, ChevronDown, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, HelpCircle, Lock, ChevronDown, Menu, X } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
 
@@ -110,23 +111,20 @@ export default function Layout({ children }) {
           })}
         </nav>
 
-        {/* User */}
-        <div className="p-4 border-t border-slate-800">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-xs font-bold">
-              {user?.email?.[0]?.toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-white truncate">{user?.displayName || user?.email}</p>
-              <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-slate-400 hover:text-red-400 text-sm transition-colors w-full"
-          >
-            <LogOut className="w-4 h-4" /> Uitloggen
-          </button>
+        {/* Secundaire nav — Help en Privacy */}
+        <div className="px-4 pb-2 border-t border-slate-800 pt-3">
+          {navItemsSecundair.map(({ to, icon: Icon, label }) => {
+            const active = location.pathname === to;
+            return (
+              <Link key={to} to={to}
+                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
+                  active ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
+                }`}>
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                {label}
+              </Link>
+            );
+          })}
         </div>
       </aside>
 
@@ -166,10 +164,14 @@ export default function Layout({ children }) {
               </Link>
             ))}
           </nav>
-          <div className="p-4 border-t border-slate-800">
-            <button onClick={handleLogout} className="flex items-center gap-2 text-red-400">
-              <LogOut className="w-4 h-4" /> Uitloggen
-            </button>
+          {/* Secundaire nav mobiel */}
+          <div className="p-4 border-t border-slate-800 space-y-1">
+            {navItemsSecundair.map(({ to, icon: Icon, label }) => (
+              <Link key={to} to={to} onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white text-sm">
+                <Icon className="w-5 h-5" /> {label}
+              </Link>
+            ))}
           </div>
         </div>
       )}
