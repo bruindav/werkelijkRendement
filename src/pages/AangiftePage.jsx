@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useBanken } from '../hooks/useFirestore';
+import { useBanken, getAangifteData } from '../hooks/useLocalDB';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatPct, HEFFINGSVRIJ_VERMOGEN, FORFAITAIR_TARIEVEN } from '../services/berekening';
-import { getDocs, collection } from 'firebase/firestore';
-import { db } from '../services/firebase';
+
 import { FileText, Printer, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function AangiftePage() {
@@ -23,14 +22,13 @@ export default function AangiftePage() {
       let totaalDividend = 0, totaalRente = 0, totaalKoersresultaat = 0;
       const bankenDetail = [];
 
-      for (const bank of banken) {
-        let bankRendement = 0, bankVermogen = 0;
-        const rekeningenSnap = await getDocs(collection(db, `users/${user.uid}/years/${year}/banks/${bank.id}/accounts`));
+      const allData = await getAangifteData(year);
 
-        for (const rek of rekeningenSnap.docs) {
-          const positiesSnap = await getDocs(collection(db, `users/${user.uid}/years/${year}/banks/${bank.id}/accounts/${rek.id}/positions`));
-          for (const pos of positiesSnap.docs) {
-            const r = berekenPositieRendement(pos.data());
+      for (const bank of allData) {
+        let bankRendement = 0, bankVermogen = 0;
+        for (const rek of bank.rekeningen) {
+          for (const pos of rek.posities || []) {
+            const r = berekenPositieRendement(pos);
             bankRendement += r.totaalRendement;
             bankVermogen += r.waardeJan1;
             totaalRendement += r.totaalRendement;
@@ -56,7 +54,7 @@ export default function AangiftePage() {
     }
 
     laadData();
-  }, [user?.uid, year, banken]);
+  }, [year]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">

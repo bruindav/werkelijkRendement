@@ -1,13 +1,12 @@
 // Instellingen — Box 3 tarieven, heffingsvrij vermogen, partner
 import { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { getInstellingen, setInstellingen as saveInstellingen } from '../services/localDb';
 import { useApp } from '../context/AppContext';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
 import { Settings, Save, RotateCcw, Check, Users, User, Copy, ArrowRight, AlertTriangle, Loader, ChevronDown } from 'lucide-react';
 import { FORFAITAIR_TARIEVEN, HEFFINGSVRIJ_VERMOGEN } from '../services/berekening';
-import { kopieerJaar, controleerJaarLeeg } from '../hooks/useFirestore';
+import { kopieerJaar, controleerJaarLeeg } from '../hooks/useLocalDB';
 
 const JAREN = [2021, 2022, 2023, 2024, 2025, 2026];
 
@@ -40,14 +39,14 @@ export default function InstellingenPage() {
   // Laad instellingen
   useEffect(() => {
     if (!user?.uid) return;
-    getDoc(doc(db, `users/${user.uid}/instellingen/box3`)).then(snap => {
-      setInstellingen(snap.exists() ? { ...DEFAULT_INSTELLINGEN, ...snap.data() } : { ...DEFAULT_INSTELLINGEN });
+    getInstellingen().then(data => {
+      setInstellingen(data ? { ...DEFAULT_INSTELLINGEN, ...data } : { ...DEFAULT_INSTELLINGEN });
       setLoading(false);
     });
-  }, [user?.uid]);
+  }, []);
 
   const sla = async () => {
-    await setDoc(doc(db, `users/${user.uid}/instellingen/box3`), instellingen);
+    await saveInstellingen(instellingen);
     setOpgeslagen(true);
     setTimeout(() => setOpgeslagen(false), 2000);
   };

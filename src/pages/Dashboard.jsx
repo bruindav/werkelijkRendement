@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useBanken } from '../hooks/useFirestore';
+import { useBanken, getDashboardData } from '../hooks/useLocalDB';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
-import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { getInstellingen } from '../services/localDb';
 import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
@@ -117,23 +116,18 @@ export default function Dashboard() {
       let aantalPosities = 0;
       const bankDetails = [];
 
-      for (const bank of banken) {
+      const allData = await getDashboardData(selectedYear);
+
+      for (const bank of allData) {
         let bankJan1 = 0, bankDec31 = 0, bankRendement = 0;
         const bankRekeningen = [];
 
-        const rekeningenSnap = await getDocs(
-          collection(db, `users/${user.uid}/years/${selectedYear}/banks/${bank.id}/accounts`)
-        );
-        for (const rek of rekeningenSnap.docs) {
-          const rekData = rek.data();
+        for (const rek of bank.rekeningen) {
           let rekJan1 = 0, rekDec31 = 0, rekRendement = 0;
 
-          if (rekData.type === 'beleggen' || !rekData.type) {
-            const positiesSnap = await getDocs(
-              collection(db, `users/${user.uid}/years/${selectedYear}/banks/${bank.id}/accounts/${rek.id}/positions`)
-            );
-            for (const pos of positiesSnap.docs) {
-              const r = berekenPositieRendement(pos.data());
+          if (rek.type === 'beleggen' || !rek.type) {
+            for (const pos of rek.posities || []) {
+              const r = berekenPositieRendement(pos);
               rekJan1 += r.waardeJan1;
               rekDec31 += r.waardeDec31;
               rekRendement += r.totaalRendement;
@@ -141,11 +135,10 @@ export default function Dashboard() {
               totaalBeleggenJan1 += r.waardeJan1;
             }
           } else {
-            const d = rekData;
-            if (d.jan1_saldo || d.dec31_saldo || d.ontvangen_rente) {
-              rekJan1 = d.jan1_saldo || 0;
-              rekDec31 = d.dec31_saldo || 0;
-              rekRendement = (d.ontvangen_rente || 0) - (d.kosten || 0);
+            if (rek.jan1_saldo || rek.dec31_saldo || rek.ontvangen_rente) {
+              rekJan1 = rek.jan1_saldo || 0;
+              rekDec31 = rek.dec31_saldo || 0;
+              rekRendement = (rek.ontvangen_rente || 0) - (rek.kosten || 0);
               aantalPosities++;
               totaalSparenJan1 += rekJan1;
             }
@@ -154,12 +147,12 @@ export default function Dashboard() {
           if (rekJan1 || rekDec31 || rekRendement) {
             bankRekeningen.push({
               id: rek.id,
-              naam: rekData.naam,
-              type: rekData.type || 'beleggen',
+              naam: rek.naam,
+              type: rek.type || 'beleggen',
               jan1: rekJan1,
               dec31: rekDec31,
               rendement: rekRendement,
-              volgorde: rekData.volgorde ?? 999,
+              volgorde: rek.volgorde ?? 999,
             });
             bankJan1 += rekJan1;
             bankDec31 += rekDec31;

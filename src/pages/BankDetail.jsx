@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useRekeningen, useBank } from '../hooks/useFirestore';
+import { useRekeningen, useBank } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
 import { CreditCard, TrendingUp, PiggyBank, Lock, Plus, Trash2, ArrowRight,
          X, Check, Edit3, ChevronDown, ChevronUp, Calculator, Percent } from 'lucide-react';

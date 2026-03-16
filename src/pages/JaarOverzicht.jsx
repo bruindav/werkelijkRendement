@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useBanken } from '../hooks/useFirestore';
+import { useBanken } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
 import DragLijst, { DragHandle } from '../components/DragLijst';
 import { Building2, Plus, Trash2, ArrowRight, X, Check, Edit3 } from 'lucide-react';

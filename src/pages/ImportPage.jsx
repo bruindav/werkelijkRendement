@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { importeerBank } from '../hooks/useLocalDB';
 import { parseerPDF, detectBankType } from '../services/pdfParser';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
@@ -275,8 +274,7 @@ export default function ImportPage() {
 
         for (const { jaar, rekening } of geselecteerdeJaren) {
           setVoortgang({ gedaan: totaalGedaan, totaal: totaalItems, huidig: `${jaar} - ${rekening.naam}` });
-
-          await importeerRekeningVoorJaar(user.uid, jaar, parseResultaat.bank, rekening);
+          await importeerBank(jaar, { naam: parseResultaat.bank }, [rekening]);
           totaalGedaan++;
           aangemaakteRekeningen++;
         }
@@ -292,34 +290,17 @@ export default function ImportPage() {
             if (!groepen[bankNaam]) groepen[bankNaam] = [];
             groepen[bankNaam].push(rec);
           }
-
           for (const [bankNaam, recs] of Object.entries(groepen)) {
-            // Maak bank aan
-            const bankRef = await addDoc(
-              collection(db, `users/${user.uid}/years/${importJaar}/banks`),
-              { naam: `Raisin – ${bankNaam}`, label: bankNaam }
-            );
-
-            for (const rec of recs) {
-              setVoortgang({ gedaan: totaalGedaan, totaal: totaalItems, huidig: rec.naam });
-              await importeerRekeningInBank(user.uid, importJaar, bankRef.id, rec);
-              totaalGedaan++;
-              aangemaakteRekeningen++;
-            }
+            setVoortgang({ gedaan: totaalGedaan, totaal: totaalItems, huidig: `Raisin – ${bankNaam}` });
+            await importeerBank(importJaar, { naam: `Raisin – ${bankNaam}` }, recs);
+            totaalGedaan += recs.length;
+            aangemaakteRekeningen += recs.length;
           }
         } else {
-          // Centraal Beheer of ABN AMRO: één bank
-          const bankRef = await addDoc(
-            collection(db, `users/${user.uid}/years/${importJaar}/banks`),
-            { naam: parseResultaat.bank }
-          );
-
-          for (const rec of geselRekeningen) {
-            setVoortgang({ gedaan: totaalGedaan, totaal: totaalItems, huidig: rec.naam });
-            await importeerRekeningInBank(user.uid, importJaar, bankRef.id, rec);
-            totaalGedaan++;
-            aangemaakteRekeningen++;
-          }
+          setVoortgang({ gedaan: totaalGedaan, totaal: totaalItems, huidig: parseResultaat.bank });
+          await importeerBank(importJaar, { naam: parseResultaat.bank }, geselRekeningen);
+          totaalGedaan += geselRekeningen.length;
+          aangemaakteRekeningen += geselRekeningen.length;
         }
       }
 
@@ -332,86 +313,6 @@ export default function ImportPage() {
     }
   };
 
-  // ============ FIRESTORE HELPERS ============
-  async function importeerRekeningVoorJaar(uid, jaar, bankNaam, rekening) {
-    const bankRef = await addDoc(
-      collection(db, `users/${uid}/years/${jaar}/banks`),
-      { naam: bankNaam }
-    );
-    await importeerRekeningInBank(uid, jaar, bankRef.id, rekening);
-  }
-
-  async function importeerRekeningInBank(uid, jaar, bankId, rec) {
-    // Maak rekening aan
-    const rekeningData = {
-      naam: rec.weergave_naam || rec.naam,
-      type: rec.type,
-      rekeningnummer: rec.rekeningnummer || rec.iban || '',
-      kenmerk: rec.kenmerk || '',
-      ...(rec.dividend_totaal ? { notitie: `Bruto dividend totaal: €${rec.dividend_totaal}` } : {}),
-    };
-    const rekRef = await addDoc(
-      collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts`),
-      rekeningData
-    );
-
-    if (rec.type === 'beleggen' && rec.posities && rec.posities.length > 0) {
-      // Evi-stijl: importeer elke positie (fonds) apart
-      for (const pos of rec.posities) {
-        await addDoc(
-          collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}/positions`),
-          {
-            naam: pos.naam,
-            type: pos.type || 'aandeel',
-            ticker: '',
-            isin: pos.isin || '',
-            jan1_waarde: pos.jan1_waarde || 0,
-            dec31_waarde: pos.dec31_waarde || 0,
-            jan1_aantal: pos.jan1_aantal || 0,
-            jan1_prijs: pos.jan1_prijs || 0,
-            dec31_aantal: pos.dec31_aantal || 0,
-            dec31_prijs: pos.dec31_prijs || 0,
-            aankopen: pos.aankopen_totaal > 0
-              ? [{ datum: `${jaar}-01-01`, aantal: 0, prijs: 0, totaal: pos.aankopen_totaal }] : [],
-            verkopen: pos.verkopen_totaal > 0
-              ? [{ datum: `${jaar}-12-31`, aantal: 0, prijs: 0, totaal: pos.verkopen_totaal }] : [],
-            dividend: pos.dividend || 0, rente: 0, kosten: 0,
-          }
-        );
-      }
-    } else if (rec.type === 'beleggen') {
-      // Standaard beleggen: één positie met totaalwaarden
-      await addDoc(
-        collection(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}/positions`),
-        {
-          naam: rec.weergave_naam || 'Beleggingsrekening', type: 'fonds', ticker: '', isin: '',
-          jan1_waarde: rec.jan1_waarde || 0, dec31_waarde: rec.dec31_waarde || 0,
-          jan1_aantal: 0, jan1_prijs: 0, dec31_aantal: 0, dec31_prijs: 0,
-          aankopen: rec.aankopen_totaal > 0
-            ? [{ datum: `${jaar}-01-01`, aantal: 0, prijs: 0, totaal: rec.aankopen_totaal }] : [],
-          verkopen: rec.verkopen_totaal > 0
-            ? [{ datum: `${jaar}-12-31`, aantal: 0, prijs: 0, totaal: rec.verkopen_totaal }] : [],
-          dividend: rec.dividend_totaal || 0, rente: 0, kosten: 0,
-        }
-      );
-    } else {
-      // Spaar of deposito: data direct op de rekening opslaan (geen subcollectie)
-      await updateDoc(
-        doc(db, `users/${uid}/years/${jaar}/banks/${bankId}/accounts/${rekRef.id}`),
-        {
-          jan1_saldo: rec.jan1_saldo || 0,
-          dec31_saldo: rec.dec31_saldo || 0,
-          ontvangen_rente: rec.ontvangen_rente || 0,
-          rente_pct: rec.rente_pct || 0,
-          kosten: rec.kosten || 0,
-          notitie: rec.notitie || '',
-          kenmerk: rec.kenmerk || '',
-          ...(rec.looptijd_maanden ? { looptijd_maanden: rec.looptijd_maanden } : {}),
-          ...(rec.land ? { land: rec.land } : {}),
-        }
-      );
-    }
-  }
 
   // ============ RENDER ============
   const aantalGeselecteerd = Object.values(geselecteerd).filter(Boolean).length;

@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { usePosities, useBank, useRekening } from '../hooks/useFirestore';
+import { usePosities, useBank, useRekening } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
 import { berekenPositieRendement, formatEuro, formatPct } from '../services/berekening';
 import { zoekAandeel, haalKoersenVoorJaar } from '../services/koersApi';
