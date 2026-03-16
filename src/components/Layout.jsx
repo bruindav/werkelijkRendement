@@ -1,8 +1,8 @@
-// Fix 10 - Jaar switchen navigeert mee 
+// Fix 10 - Jaar switchen navigeert mee
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, LogOut, ChevronDown, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, HelpCircle, Lock, LogOut, ChevronDown, Menu, X } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
 
@@ -49,6 +49,12 @@ export default function Layout({ children }) {
     { to: '/importeren', icon: Upload, label: 'Importeren', exact: true },
     { to: '/instellingen', icon: Settings, label: 'Instellingen', exact: true },
     { to: '/backup', icon: Shield, label: 'Backup & Restore', exact: true },
+  ];
+
+  // Secundaire nav items — onderaan sidebar
+  const navItemsSecundair = [
+    { to: '/help', icon: HelpCircle, label: 'Help', exact: true },
+    { to: '/privacy', icon: Lock, label: 'Privacy & Gegevens', exact: true },
   ];
 
   return (
