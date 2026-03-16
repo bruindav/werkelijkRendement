@@ -107,6 +107,12 @@ export function usePosities(uid, year, bankId, accountId) {
 }
 
 // ============ JAAR KOPIËREN ============
+// Controleer of een jaar al banken/rekeningen heeft
+export async function controleerJaarLeeg(uid, jaar) {
+  const snap = await getDocs(collection(db, banksPath(uid, jaar)));
+  return snap.empty;
+}
+
 export async function kopieerJaar(uid, vanJaar, naarJaar) {
   const bankenSnap = await getDocs(collection(db, banksPath(uid, vanJaar)));
 
