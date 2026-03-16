@@ -5,7 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
-// Base path voor user data
+// Base path voor user data 
 const userPath = (uid) => `users/${uid}`;
 const yearPath = (uid, year) => `users/${uid}/years/${year}`;
 const banksPath = (uid, year) => `users/${uid}/years/${year}/banks`;
