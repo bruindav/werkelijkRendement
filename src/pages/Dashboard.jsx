@@ -200,20 +200,9 @@ export default function Dashboard() {
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 sm:mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-slate-400 mt-1">Overzicht belastingjaar {selectedYear}</p>
-        </div>
-
-        <Link
-            to={`/jaar/${selectedYear}`}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-colors"
-          >
-            <Building2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Beheer posities</span>
-            <span className="sm:hidden">Posities</span>
-          </Link>
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <p className="text-slate-400 mt-1">Overzicht belastingjaar {selectedYear}</p>
       </div>
 
       {/* Stats — mobiel: compacte kaart, desktop: 4 blokken */}
