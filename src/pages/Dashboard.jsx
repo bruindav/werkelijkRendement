@@ -30,6 +30,55 @@ function StatCard({ label, value, sub, color = 'blue', icon }) {
   );
 }
 
+// Compacte mobiele samenvatting — één kaart met alles
+function MobieleSamenvatting({ totalen, rendementPositief, selectedYear }) {
+  const pct = totalen.totaalVermogenJan1 > 0
+    ? (totalen.totaalRendement / totalen.totaalVermogenJan1) * 100
+    : 0;
+  return (
+    <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 mb-6 sm:hidden">
+      {/* Vermogen rij */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-center flex-1">
+          <p className="text-xs text-slate-500 mb-0.5">1 jan</p>
+          <p className="text-base font-bold text-white">{formatEuro(totalen.totaalVermogenJan1)}</p>
+        </div>
+        <div className="text-slate-600 px-2">→</div>
+        <div className="text-center flex-1">
+          <p className="text-xs text-slate-500 mb-0.5">31 dec</p>
+          <p className="text-base font-bold text-white">{formatEuro(totalen.totaalVermogenDec31)}</p>
+        </div>
+      </div>
+      {/* Scheidingslijn */}
+      <div className="border-t border-slate-700 my-3" />
+      {/* Rendement + belasting rij */}
+      <div className="flex items-center justify-between">
+        <div className="text-center flex-1">
+          <p className="text-xs text-slate-500 mb-0.5">Rendement</p>
+          <p className={`text-base font-bold ${rendementPositief ? 'text-emerald-400' : 'text-red-400'}`}>
+            {rendementPositief ? '+' : ''}{formatEuro(totalen.totaalRendement)}
+          </p>
+          <p className="text-xs text-slate-600 mt-0.5">{formatPct(pct)}</p>
+        </div>
+        <div className="w-px h-10 bg-slate-700 mx-2" />
+        <div className="text-center flex-1">
+          <p className="text-xs text-slate-500 mb-0.5">Belasting werkelijk</p>
+          <p className="text-base font-bold text-red-400">{formatEuro(totalen.vergelijk.werkelijk.belasting)}</p>
+          <p className="text-xs text-slate-600 mt-0.5">vs {formatEuro(totalen.vergelijk.forfaitair.belasting)} forfaitair</p>
+        </div>
+        <div className="w-px h-10 bg-slate-700 mx-2" />
+        <div className="text-center flex-1">
+          <p className="text-xs text-slate-500 mb-0.5">Voordeligst</p>
+          <p className={`text-xs font-bold ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? '✓ Werkelijk' : '✓ Forfaitair'}
+          </p>
+          <p className="text-xs text-slate-600 mt-0.5">-{formatEuro(totalen.vergelijk.voordeel)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user, selectedYear, setSelectedYear } = useApp();
   const { banken } = useBanken(user?.uid, selectedYear);
@@ -198,15 +247,23 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats grid */}
+      {/* Stats — mobiel: compacte kaart, desktop: 4 blokken */}
       {loadingTotalen ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-28 bg-slate-800 rounded-2xl animate-pulse" />
+            <div key={i} className="h-24 sm:h-28 bg-slate-800 rounded-2xl animate-pulse" />
           ))}
         </div>
       ) : totalen ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <>
+          {/* Mobiele compacte samenvatting */}
+          <MobieleSamenvatting
+            totalen={totalen}
+            rendementPositief={rendementPositief}
+            selectedYear={selectedYear}
+          />
+          {/* Desktop: 4 blokken (verborgen op mobiel) */}
+          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard
             label="Vermogen 1 januari"
             value={formatEuro(totalen.totaalVermogenJan1)}
@@ -231,7 +288,8 @@ export default function Dashboard() {
             sub={`vs forfaitair: ${formatEuro(totalen.vergelijk.forfaitair.belasting)}`}
             color="red"
           />
-        </div>
+          </div>
+        </>
       ) : (
         <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 text-center mb-8">
           <AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-3" />
