@@ -1,3 +1,4 @@
+// Fix100 - getDoc Firebase vervangen door getInstellingen localDb
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
