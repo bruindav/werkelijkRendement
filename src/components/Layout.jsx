@@ -1,4 +1,4 @@
-// Fix 10 - Jaar switchen navigeert mee
+// Fix 10 - Jaar switchen navigeert mee 
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
