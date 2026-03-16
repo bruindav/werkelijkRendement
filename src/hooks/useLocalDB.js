@@ -1,4 +1,4 @@
-// Lokale database hooks — vervangt useFirestore.js
+// Lokale database hooks — vervangt useFirestore.js 
 // Dezelfde API als useFirestore zodat alle pagina's ongewijzigd blijven
 // Data staat in IndexedDB (lokaal in de browser)
 
