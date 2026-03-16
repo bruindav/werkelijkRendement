@@ -1,4 +1,5 @@
 // Fix102 - Multi-file import — meerdere PDF bestanden tegelijk
+// Fix104 - Mobiele import fix: label ipv div+onClick, accept application/pdf toegevoegd
 import { useState, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
@@ -322,23 +323,29 @@ export default function ImportPage() {
           </div>
         </div>
 
-        {/* Drop zone */}
-        <div
+        {/* Drop zone — label ipv div+onClick zodat het op mobiel werkt */}
+        <label
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all mb-4 ${
+          className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all mb-4 flex flex-col items-center ${
             dragOver
               ? 'border-blue-500 bg-blue-950/40'
               : 'border-slate-600 hover:border-slate-500 bg-slate-800/20 hover:bg-slate-800/40'
           }`}
         >
-          <input ref={fileInputRef} type="file" accept=".pdf" multiple onChange={onFileChange} className="hidden" />
-          <Upload size={28} className="text-slate-500 mx-auto mb-2" />
-          <p className="text-slate-300 text-sm font-medium">Sleep PDF's hierheen of klik om te kiezen</p>
-          <p className="text-slate-500 text-xs mt-1">Meerdere bestanden tegelijk mogelijk</p>
-        </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            multiple
+            onChange={onFileChange}
+            className="hidden"
+          />
+          <Upload size={28} className="text-slate-500 mb-2" />
+          <p className="text-slate-300 text-sm font-medium">Tik om bestanden te kiezen</p>
+          <p className="text-slate-500 text-xs mt-1">Of sleep PDF's hierheen · meerdere bestanden tegelijk</p>
+        </label>
 
         {/* Bestandenlijst */}
         {bestanden.length > 0 && (
