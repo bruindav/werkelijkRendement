@@ -114,7 +114,7 @@ function TickerInfoPopup() {
 }
 
 
-// ============ VALUTA SELECTOR ============
+// ============ VALUTA DEFINITIE ============
 const VALUTA_LIJST = [
   { code: 'EUR', label: 'Euro',            symbool: '€', ticker: null },
   { code: 'USD', label: 'US Dollar',       symbool: '$', ticker: 'EURUSD=X' },
@@ -124,74 +124,23 @@ const VALUTA_LIJST = [
   { code: 'CAD', label: 'Canadese Dollar', symbool: 'C$', ticker: 'EURCAD=X' },
 ];
 
-function ValutaSelector({ valuta, onChange, onWisselkoersOphalen, loadingWisselkoers }) {
-  const [open, setOpen] = useState(false);
-  const huidig = VALUTA_LIJST.find(v => v.code === valuta) || VALUTA_LIJST[0];
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
-          valuta !== 'EUR'
-            ? 'bg-amber-900/30 border-amber-700/50 text-amber-400'
-            : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
-        }`}
-        title="Valuta wijzigen"
-      >
-        <span>{huidig.symbool}</span>
-        <span className="text-xs">{huidig.code}</span>
-        <ChevronDown className="w-3 h-3 opacity-60" />
-      </button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-9 z-20 w-52 bg-slate-800 border border-slate-600 rounded-xl shadow-xl overflow-hidden">
-            <p className="text-xs text-slate-500 px-3 pt-2.5 pb-1.5 border-b border-slate-700">Valuta kiezen</p>
-            {VALUTA_LIJST.map(v => (
-              <button
-                key={v.code}
-                onClick={() => { onChange(v.code); setOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors hover:bg-slate-700 ${
-                  v.code === valuta ? 'bg-blue-900/30 text-blue-300' : 'text-slate-300'
-                }`}
-              >
-                <span className="w-6 text-center font-medium">{v.symbool}</span>
-                <span className="flex-1">{v.label}</span>
-                <span className="text-xs text-slate-500">{v.code}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* Wisselkoers ophalen knop — alleen voor niet-EUR */}
-      {valuta !== 'EUR' && (
-        <button
-          type="button"
-          onClick={onWisselkoersOphalen}
-          disabled={loadingWisselkoers}
-          className="mt-1.5 flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50"
-        >
-          {loadingWisselkoers
-            ? <Loader className="w-3 h-3 animate-spin" />
-            : <Search className="w-3 h-3" />}
-          Wisselkoers ophalen
-        </button>
-      )}
-    </div>
-  );
+// Bereken EUR waarde vanuit lokale valuta
+function lokaalNaarEur(lokaalBedrag, wisselkoers) {
+  if (!wisselkoers || !lokaalBedrag) return null;
+  return parseFloat(lokaalBedrag) * wisselkoers;
 }
 
 function PositieForm({ onSave, onCancel, year, initial = null }) {
+  // invoerModus: 'EUR' = direct in euro, 'lokaal' = in vreemde valuta met omrekening
+  const [invoerModus, setInvoerModus] = useState(
+    initial?.valuta && initial.valuta !== 'EUR' ? 'lokaal' : 'EUR'
+  );
   const [form, setForm] = useState({
     naam: initial?.naam || '',
     type: initial?.type || 'aandeel',
     ticker: initial?.ticker || '',
     isin: initial?.isin || '',
-    valuta: initial?.valuta || 'EUR',
+    valuta: initial?.valuta || 'USD', // valuta voor lokale modus
     jan1_aantal: initial?.jan1_aantal || '',
     jan1_prijs: initial?.jan1_prijs || '',
     jan1_waarde: initial?.jan1_waarde || '',
@@ -203,9 +152,20 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     kosten: initial?.kosten || '',
     maandelijks_bedrag: initial?.maandelijks_bedrag || '',
   });
+  // Lokale invoervelden (in vreemde valuta) — apart van EUR-velden
+  const [lokaal, setLokaal] = useState({
+    jan1_koers: initial?.jan1_koers_lokaal ? String(initial.jan1_koers_lokaal) : '',
+    jan1_aantal: initial?.jan1_aantal ? String(initial.jan1_aantal) : '',
+    dec31_koers: initial?.dec31_koers_lokaal ? String(initial.dec31_koers_lokaal) : '',
+    dec31_aantal: initial?.dec31_aantal ? String(initial.dec31_aantal) : '',
+  });
   const [loadingKoers, setLoadingKoers] = useState(false);
-  const [loadingWisselkoers, setLoadingWisselkoers] = useState(false);
-  const [wisselkoersen, setWisselkoersen] = useState({ jan1: null, dec31: null }); // EUR per 1 vreemde munt
+  const [wisselkoersen, setWisselkoersen] = useState({
+    jan1: initial?.valuta !== 'EUR' && initial?.jan1_prijs && initial?.jan1_koers_lokaal
+      ? initial.jan1_prijs / initial.jan1_koers_lokaal : null,
+    dec31: initial?.valuta !== 'EUR' && initial?.dec31_prijs && initial?.dec31_koers_lokaal
+      ? initial.dec31_prijs / initial.dec31_koers_lokaal : null,
+  });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -231,70 +191,72 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     }
   };
 
+  // Haal aandeelkoersen op (+ wisselkoers als lokale modus)
   const haalKoersen = async () => {
     if (!form.ticker) return;
     setLoadingKoers(true);
     try {
-      const { jan1, dec31 } = await haalKoersenVoorJaar(form.ticker, year);
-      // Haal ook wisselkoers op als valuta != EUR
+      // Haal wisselkoers op als in lokale modus
       let wk = wisselkoersen;
-      if (form.valuta !== 'EUR') {
+      if (invoerModus === 'lokaal') {
         const valutaInfo = VALUTA_LIJST.find(v => v.code === form.valuta);
         if (valutaInfo?.ticker) {
           const wkJan = await haalHistorischeKoers(valutaInfo.ticker, `${year}-01-02`);
           const wkDec = await haalHistorischeKoers(valutaInfo.ticker, `${year}-12-30`);
-          // EURUSD=X geeft USD per EUR, wij willen EUR per USD → 1/koers
           wk = {
-            jan1: wkJan ? 1 / wkJan.slotkoers : null,
-            dec31: wkDec ? 1 / wkDec.slotkoers : null,
+            jan1:  wkJan  ? 1 / wkJan.slotkoers  : null,
+            dec31: wkDec  ? 1 / wkDec.slotkoers  : null,
           };
           setWisselkoersen(wk);
         }
       }
-      if (jan1) {
-        const koers = form.valuta !== 'EUR' && wk.jan1
-          ? (jan1.slotkoers * wk.jan1).toFixed(4)  // lokale koers → EUR
-          : jan1.slotkoers.toString();
-        set('jan1_prijs', koers);
-        if (form.jan1_aantal) set('jan1_waarde', (parseFloat(form.jan1_aantal) * parseFloat(koers)).toFixed(2));
-      }
-      if (dec31) {
-        const koers = form.valuta !== 'EUR' && wk.dec31
-          ? (dec31.slotkoers * wk.dec31).toFixed(4)
-          : dec31.slotkoers.toString();
-        set('dec31_prijs', koers);
-        if (form.dec31_aantal) set('dec31_waarde', (parseFloat(form.dec31_aantal) * parseFloat(koers)).toFixed(2));
+      // Haal aandeelkoersen op
+      const { jan1, dec31 } = await haalKoersenVoorJaar(form.ticker, year);
+      if (invoerModus === 'lokaal') {
+        // Sla lokale koers op, bereken EUR live
+        if (jan1) setLokaal(l => ({ ...l, jan1_koers: jan1.slotkoers.toString() }));
+        if (dec31) setLokaal(l => ({ ...l, dec31_koers: dec31.slotkoers.toString() }));
+      } else {
+        if (jan1) {
+          set('jan1_prijs', jan1.slotkoers.toString());
+          if (form.jan1_aantal) set('jan1_waarde', (parseFloat(form.jan1_aantal) * jan1.slotkoers).toFixed(2));
+        }
+        if (dec31) {
+          set('dec31_prijs', dec31.slotkoers.toString());
+          if (form.dec31_aantal) set('dec31_waarde', (parseFloat(form.dec31_aantal) * dec31.slotkoers).toFixed(2));
+        }
       }
     } catch (e) { console.error('Koersen ophalen mislukt:', e); }
     setLoadingKoers(false);
   };
 
-  const haalWisselkoers = async () => {
+  // Haal alleen wisselkoers op (als geen ticker bekend)
+  const haalAlleenWisselkoers = async () => {
     const valutaInfo = VALUTA_LIJST.find(v => v.code === form.valuta);
     if (!valutaInfo?.ticker) return;
-    setLoadingWisselkoers(true);
+    setLoadingKoers(true);
     try {
-      const wkJan = await haalHistorischeKoers(valutaInfo.ticker, `${year}-01-02`);
-      const wkDec = await haalHistorischeKoers(valutaInfo.ticker, `${year}-12-30`);
-      const wk = {
-        jan1: wkJan ? 1 / wkJan.slotkoers : null,
-        dec31: wkDec ? 1 / wkDec.slotkoers : null,
-      };
-      setWisselkoersen(wk);
-      // Herbereken waarden als prijs al ingevuld
-      if (wk.jan1 && form.jan1_prijs) {
-        const eurPrijs = (parseFloat(form.jan1_prijs) * wk.jan1).toFixed(4);
-        set('jan1_prijs', eurPrijs);
-        if (form.jan1_aantal) set('jan1_waarde', (parseFloat(form.jan1_aantal) * parseFloat(eurPrijs)).toFixed(2));
-      }
-      if (wk.dec31 && form.dec31_prijs) {
-        const eurPrijs = (parseFloat(form.dec31_prijs) * wk.dec31).toFixed(4);
-        set('dec31_prijs', eurPrijs);
-        if (form.dec31_aantal) set('dec31_waarde', (parseFloat(form.dec31_aantal) * parseFloat(eurPrijs)).toFixed(2));
-      }
+      const wkJan  = await haalHistorischeKoers(valutaInfo.ticker, `${year}-01-02`);
+      const wkDec  = await haalHistorischeKoers(valutaInfo.ticker, `${year}-12-30`);
+      setWisselkoersen({
+        jan1:  wkJan  ? 1 / wkJan.slotkoers  : null,
+        dec31: wkDec  ? 1 / wkDec.slotkoers  : null,
+      });
     } catch (e) { console.error('Wisselkoers ophalen mislukt:', e); }
-    setLoadingWisselkoers(false);
+    setLoadingKoers(false);
   };
+
+  // Live EUR waarden vanuit lokale invoer
+  const eurJan1Waarde  = wisselkoersen.jan1  && lokaal.jan1_aantal  && lokaal.jan1_koers
+    ? lokaalNaarEur(parseFloat(lokaal.jan1_koers)  * parseFloat(lokaal.jan1_aantal),  1)
+    : null;
+  const eurDec31Waarde = wisselkoersen.dec31 && lokaal.dec31_aantal && lokaal.dec31_koers
+    ? lokaalNaarEur(parseFloat(lokaal.dec31_koers) * parseFloat(lokaal.dec31_aantal), 1)
+    : null;
+  const eurJan1Koers   = wisselkoersen.jan1  && lokaal.jan1_koers
+    ? lokaalNaarEur(parseFloat(lokaal.jan1_koers),  wisselkoersen.jan1)  : null;
+  const eurDec31Koers  = wisselkoersen.dec31 && lokaal.dec31_koers
+    ? lokaalNaarEur(parseFloat(lokaal.dec31_koers), wisselkoersen.dec31) : null;
 
   const handleSelectAandeel = (r) => {
     set('naam', r.name);
@@ -320,20 +282,48 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
 
   const handleSave = () => {
     if (!form.naam) return;
-    onSave({
-      naam: form.naam, type: form.type, ticker: form.ticker, isin: form.isin,
-      valuta: form.valuta || 'EUR',
-      jan1_aantal: parseFloat(form.jan1_aantal) || 0,
-      jan1_prijs: parseFloat(form.jan1_prijs) || 0,
-      jan1_waarde: parseFloat(form.jan1_waarde) || 0,
-      dec31_aantal: parseFloat(form.dec31_aantal) || 0,
-      dec31_prijs: parseFloat(form.dec31_prijs) || 0,
-      dec31_waarde: parseFloat(form.dec31_waarde) || 0,
-      dividend: parseFloat(form.dividend) || 0,
-      rente: parseFloat(form.rente) || 0,
-      kosten: parseFloat(form.kosten) || 0,
-      maandelijks_bedrag: parseFloat(form.maandelijks_bedrag) || 0,
-    });
+    let saveData;
+    if (invoerModus === 'lokaal' && wisselkoersen.jan1) {
+      // Bereken EUR waarden vanuit lokale koers
+      const j1Aantal = parseFloat(lokaal.jan1_aantal) || 0;
+      const j1Koers  = parseFloat(lokaal.jan1_koers)  || 0;
+      const d31Aantal = parseFloat(lokaal.dec31_aantal) || 0;
+      const d31Koers  = parseFloat(lokaal.dec31_koers)  || 0;
+      const j1EurKoers  = j1Koers  * (wisselkoersen.jan1  || 0);
+      const d31EurKoers = d31Koers * (wisselkoersen.dec31 || wisselkoersen.jan1 || 0);
+      saveData = {
+        naam: form.naam, type: form.type, ticker: form.ticker, isin: form.isin,
+        valuta: form.valuta,
+        jan1_aantal: j1Aantal,
+        jan1_prijs: parseFloat(j1EurKoers.toFixed(4)),
+        jan1_waarde: parseFloat((j1Aantal * j1EurKoers).toFixed(2)),
+        dec31_aantal: d31Aantal,
+        dec31_prijs: parseFloat(d31EurKoers.toFixed(4)),
+        dec31_waarde: parseFloat((d31Aantal * d31EurKoers).toFixed(2)),
+        jan1_koers_lokaal: j1Koers,
+        dec31_koers_lokaal: d31Koers,
+        dividend: parseFloat(form.dividend) || 0,
+        rente: parseFloat(form.rente) || 0,
+        kosten: parseFloat(form.kosten) || 0,
+        maandelijks_bedrag: parseFloat(form.maandelijks_bedrag) || 0,
+      };
+    } else {
+      saveData = {
+        naam: form.naam, type: form.type, ticker: form.ticker, isin: form.isin,
+        valuta: 'EUR',
+        jan1_aantal: parseFloat(form.jan1_aantal) || 0,
+        jan1_prijs: parseFloat(form.jan1_prijs) || 0,
+        jan1_waarde: parseFloat(form.jan1_waarde) || 0,
+        dec31_aantal: parseFloat(form.dec31_aantal) || 0,
+        dec31_prijs: parseFloat(form.dec31_prijs) || 0,
+        dec31_waarde: parseFloat(form.dec31_waarde) || 0,
+        dividend: parseFloat(form.dividend) || 0,
+        rente: parseFloat(form.rente) || 0,
+        kosten: parseFloat(form.kosten) || 0,
+        maandelijks_bedrag: parseFloat(form.maandelijks_bedrag) || 0,
+      };
+    }
+    onSave(saveData);
   };
 
   return (
@@ -392,80 +382,151 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         </button>
       )}
 
-      {/* Valuta selector */}
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-slate-400">Valuta positie:</span>
-        <ValutaSelector
-          valuta={form.valuta}
-          onChange={v => set('valuta', v)}
-          onWisselkoersOphalen={haalWisselkoers}
-          loadingWisselkoers={loadingWisselkoers}
-        />
-        {form.valuta !== 'EUR' && wisselkoersen.jan1 && (
-          <span className="text-xs text-amber-400/70">
-            1 {form.valuta} = €{wisselkoersen.jan1.toFixed(4)} (1 jan)
-          </span>
-        )}
-      </div>
+      {/* Invoer modus tabs: EUR of Lokale valuta */}
+      <div>
+        <div className="flex gap-1 bg-slate-900/60 rounded-xl p-1 mb-3">
+          {[
+            { key: 'EUR', label: '€ Invoer in euro' },
+            { key: 'lokaal', label: '💱 Invoer in andere valuta' },
+          ].map(({ key, label }) => (
+            <button key={key} type="button"
+              onClick={() => setInvoerModus(key)}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-sm font-medium transition-colors ${
+                invoerModus === key ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
 
-      {/* Waarden — compacte 2-koloms layout */}
-      <div className="bg-slate-900/40 rounded-xl overflow-hidden">
-        {/* Header */}
-        <div className="grid grid-cols-[auto_1fr_1fr] text-xs text-slate-500 border-b border-slate-800">
-          <div className="px-3 py-2 w-20"></div>
-          <div className="px-3 py-2 text-right border-l border-slate-800">1 jan {year}</div>
-          <div className="px-3 py-2 text-right border-l border-slate-800">31 dec {year}</div>
-        </div>
-        {/* Aantal rij */}
-        <div className="grid grid-cols-[auto_1fr_1fr] border-b border-slate-800/60">
-          <div className="px-3 py-2 w-20 text-xs text-slate-400 flex items-center">Aantal</div>
-          <div className="px-2 py-1.5 border-l border-slate-800/60">
-            <input type="number" step="0.001" value={form.jan1_aantal}
-              onChange={e => set('jan1_aantal', e.target.value)}
-              onBlur={() => berekenWaarde('jan1')}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        {/* MODUS EUR */}
+        {invoerModus === 'EUR' && (
+          <div className="bg-slate-900/40 rounded-xl overflow-hidden">
+            <div className="grid grid-cols-[auto_1fr_1fr] text-xs text-slate-500 border-b border-slate-800">
+              <div className="px-3 py-2 w-20" />
+              <div className="px-3 py-2 text-right border-l border-slate-800">1 jan {year}</div>
+              <div className="px-3 py-2 text-right border-l border-slate-800">31 dec {year}</div>
+            </div>
+            {[
+              { label: 'Aantal', j: 'jan1_aantal', d: 'dec31_aantal', step: '0.001', onBlur: (p) => berekenWaarde(p) },
+              { label: 'Koers (€)', j: 'jan1_prijs', d: 'dec31_prijs', step: '0.0001', onBlur: (p) => berekenWaarde(p) },
+              { label: 'Waarde (€)', j: 'jan1_waarde', d: 'dec31_waarde', step: '0.01', onBlur: (p) => berekenAantal(p) },
+            ].map(({ label, j, d, step, onBlur }, ri) => (
+              <div key={label} className={`grid grid-cols-[auto_1fr_1fr] ${ri < 2 ? 'border-b border-slate-800/60' : ''}`}>
+                <div className="px-3 py-2 w-20 text-xs text-slate-400 flex items-center">{label}</div>
+                {[{ key: j, prefix: 'jan1' }, { key: d, prefix: 'dec31' }].map(({ key, prefix }) => (
+                  <div key={key} className="px-2 py-1.5 border-l border-slate-800/60">
+                    <input type="number" step={step} value={form[key]}
+                      onChange={e => set(key, e.target.value)}
+                      onBlur={() => onBlur(prefix)}
+                      className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
-          <div className="px-2 py-1.5 border-l border-slate-800/60">
-            <input type="number" step="0.001" value={form.dec31_aantal}
-              onChange={e => set('dec31_aantal', e.target.value)}
-              onBlur={() => berekenWaarde('dec31')}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        )}
+
+        {/* MODUS LOKAAL (USD etc.) */}
+        {invoerModus === 'lokaal' && (
+          <div className="space-y-3">
+            {/* Valuta keuze */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-400">Valuta:</span>
+              <div className="flex gap-1 flex-wrap">
+                {VALUTA_LIJST.filter(v => v.code !== 'EUR').map(v => (
+                  <button key={v.code} type="button"
+                    onClick={() => { set('valuta', v.code); setWisselkoersen({ jan1: null, dec31: null }); }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
+                      form.valuta === v.code
+                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}>
+                    {v.symbool} {v.code}
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={haalAlleenWisselkoers} disabled={loadingKoers}
+                className="ml-auto flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50">
+                {loadingKoers ? <Loader className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                Wisselkoers ophalen
+              </button>
+            </div>
+
+            {/* Wisselkoers status */}
+            {wisselkoersen.jan1 && (
+              <div className="flex gap-4 text-xs text-amber-400/80 bg-amber-900/20 rounded-lg px-3 py-2">
+                <span>1 jan: 1 {form.valuta} = €{wisselkoersen.jan1.toFixed(4)}</span>
+                {wisselkoersen.dec31 && <span>31 dec: 1 {form.valuta} = €{wisselkoersen.dec31.toFixed(4)}</span>}
+              </div>
+            )}
+            {!wisselkoersen.jan1 && (
+              <p className="text-xs text-slate-500 bg-slate-900/40 rounded-lg px-3 py-2">
+                Klik "Wisselkoers ophalen" om de EUR/{form.valuta} koers voor {year} op te halen.
+                Daarna zie je live de EUR-waarden terwijl je invoert.
+              </p>
+            )}
+
+            {/* Invoertabel lokale modus */}
+            <div className="bg-slate-900/40 rounded-xl overflow-hidden">
+              <div className="grid grid-cols-[auto_1fr_1fr] text-xs text-slate-500 border-b border-slate-800">
+                <div className="px-3 py-2 w-24" />
+                <div className="px-3 py-2 text-right border-l border-slate-800">1 jan {year}</div>
+                <div className="px-3 py-2 text-right border-l border-slate-800">31 dec {year}</div>
+              </div>
+              {/* Aantal */}
+              <div className="grid grid-cols-[auto_1fr_1fr] border-b border-slate-800/60">
+                <div className="px-3 py-2 w-24 text-xs text-slate-400 flex items-center">Aantal</div>
+                <div className="px-2 py-1.5 border-l border-slate-800/60">
+                  <input type="number" step="0.001" value={lokaal.jan1_aantal}
+                    onChange={e => setLokaal(l => ({ ...l, jan1_aantal: e.target.value }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div className="px-2 py-1.5 border-l border-slate-800/60">
+                  <input type="number" step="0.001" value={lokaal.dec31_aantal}
+                    onChange={e => setLokaal(l => ({ ...l, dec31_aantal: e.target.value }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+              </div>
+              {/* Koers in lokale valuta */}
+              <div className="grid grid-cols-[auto_1fr_1fr] border-b border-slate-800/60">
+                <div className="px-3 py-2 w-24 text-xs text-slate-400 flex items-center">Koers {form.valuta}</div>
+                <div className="px-2 py-1.5 border-l border-slate-800/60">
+                  <input type="number" step="0.0001" value={lokaal.jan1_koers}
+                    onChange={e => setLokaal(l => ({ ...l, jan1_koers: e.target.value }))}
+                    placeholder={`${form.valuta} prijs`}
+                    className="w-full bg-slate-700 border border-amber-700/40 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                </div>
+                <div className="px-2 py-1.5 border-l border-slate-800/60">
+                  <input type="number" step="0.0001" value={lokaal.dec31_koers}
+                    onChange={e => setLokaal(l => ({ ...l, dec31_koers: e.target.value }))}
+                    placeholder={`${form.valuta} prijs`}
+                    className="w-full bg-slate-700 border border-amber-700/40 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+                </div>
+              </div>
+              {/* Live EUR koers */}
+              <div className="grid grid-cols-[auto_1fr_1fr] border-b border-slate-800/60 bg-slate-800/30">
+                <div className="px-3 py-2 w-24 text-xs text-slate-500 flex items-center">Koers €</div>
+                <div className="px-3 py-2 text-right text-xs border-l border-slate-800/60 text-emerald-400/80">
+                  {eurJan1Koers ? `€${eurJan1Koers.toFixed(2)}` : <span className="text-slate-600">—</span>}
+                </div>
+                <div className="px-3 py-2 text-right text-xs border-l border-slate-800/60 text-emerald-400/80">
+                  {eurDec31Koers ? `€${eurDec31Koers.toFixed(2)}` : <span className="text-slate-600">—</span>}
+                </div>
+              </div>
+              {/* Live EUR waarde */}
+              <div className="grid grid-cols-[auto_1fr_1fr] bg-slate-800/30">
+                <div className="px-3 py-2 w-24 text-xs text-slate-500 flex items-center">Waarde €</div>
+                <div className="px-3 py-2 text-right text-sm font-semibold border-l border-slate-800/60 text-white">
+                  {eurJan1Waarde ? `€${eurJan1Waarde.toFixed(2)}` : <span className="text-slate-600 text-xs font-normal">—</span>}
+                </div>
+                <div className="px-3 py-2 text-right text-sm font-semibold border-l border-slate-800/60 text-white">
+                  {eurDec31Waarde ? `€${eurDec31Waarde.toFixed(2)}` : <span className="text-slate-600 text-xs font-normal">—</span>}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-        {/* Prijs rij */}
-        <div className="grid grid-cols-[auto_1fr_1fr] border-b border-slate-800/60">
-          <div className="px-3 py-2 w-20 text-xs text-slate-400 flex items-center">
-            Prijs {form.valuta !== 'EUR' ? <span className="ml-0.5 text-amber-500/70 text-xs">€</span> : '(€)'}
-          </div>
-          <div className="px-2 py-1.5 border-l border-slate-800/60">
-            <input type="number" step="0.0001" value={form.jan1_prijs}
-              onChange={e => set('jan1_prijs', e.target.value)}
-              onBlur={() => berekenWaarde('jan1')}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-          </div>
-          <div className="px-2 py-1.5 border-l border-slate-800/60">
-            <input type="number" step="0.0001" value={form.dec31_prijs}
-              onChange={e => set('dec31_prijs', e.target.value)}
-              onBlur={() => berekenWaarde('dec31')}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-          </div>
-        </div>
-        {/* Waarde rij */}
-        <div className="grid grid-cols-[auto_1fr_1fr]">
-          <div className="px-3 py-2 w-20 text-xs text-slate-400 flex items-center">Waarde (€)</div>
-          <div className="px-2 py-1.5 border-l border-slate-800/60">
-            <input type="number" step="0.01" value={form.jan1_waarde}
-              onChange={e => set('jan1_waarde', e.target.value)}
-              onBlur={() => berekenAantal('jan1')}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-          </div>
-          <div className="px-2 py-1.5 border-l border-slate-800/60">
-            <input type="number" step="0.01" value={form.dec31_waarde}
-              onChange={e => set('dec31_waarde', e.target.value)}
-              onBlur={() => berekenAantal('dec31')}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-          </div>
-        </div>
+        )}
       </div>
 
       <div>
@@ -572,7 +633,6 @@ function TransactieRij({ transactie, type, kleur, jaar, onUpdate, onVerwijder })
 }
 
 function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
-  // Bij bewerken: detecteer modus op basis van initial data
   const detectModus = () => {
     if (!initial) return 'enkel';
     if (initial.auto) return 'maandelijks';
@@ -580,7 +640,6 @@ function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
     return 'enkel';
   };
 
-  // Standaard datum: 1 januari van geselecteerd jaar
   const standaardDatum = year ? `${year}-01-01` : '';
 
   const [modus, setModus] = useState(detectModus());
@@ -594,31 +653,52 @@ function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
   const [startMaand, setStartMaand] = useState('1');
   const [eindMaand, setEindMaand] = useState('12');
   const totaal = parseFloat(aantal) * parseFloat(prijs) || 0;
+  // Valuta voor transacties
+  const [transValuta, setTransValuta] = useState('EUR');
+  const [transWisselkoers, setTransWisselkoers] = useState(null); // EUR per 1 vreemde munt
+  const [loadingTransWk, setLoadingTransWk] = useState(false);
+  const lokaalTotaal = parseFloat(aantal) * parseFloat(prijs) || 0;
+  const eurTotaal = transValuta !== 'EUR' && transWisselkoers
+    ? lokaalTotaal * transWisselkoers : null;
+
+  const haalTransWisselkoers = async () => {
+    const valutaInfo = VALUTA_LIJST.find(v => v.code === transValuta);
+    if (!valutaInfo?.ticker || !datum) return;
+    setLoadingTransWk(true);
+    try {
+      const wk = await haalHistorischeKoers(valutaInfo.ticker, datum);
+      setTransWisselkoers(wk ? 1 / wk.slotkoers : null);
+    } catch (e) { console.error(e); }
+    setLoadingTransWk(false);
+  };
 
   const maanden = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
 
   const handleOpslaan = () => {
     if (modus === 'maandelijks') {
-      // Genereer een transactie per maand
       const start = parseInt(startMaand);
       const eind = parseInt(eindMaand);
       const bedragVal = parseFloat(maandBedrag) || 0;
       const transacties = [];
       for (let m = start; m <= eind; m++) {
         const maandStr = String(m).padStart(2, '0');
-        transacties.push({
-          datum: `${year}-${maandStr}-01`,
-          aantal: 0,
-          prijs: 0,
-          totaal: bedragVal,
-          auto: true, // markeer als automatische aankoop
-        });
+        transacties.push({ datum: `${year}-${maandStr}-01`, aantal: 0, prijs: 0, totaal: bedragVal, auto: true });
       }
-      onSave(transacties); // array van transacties
+      onSave(transacties);
     } else if (modus === 'bedrag') {
       onSave([{ datum, aantal: 0, prijs: 0, totaal: parseFloat(bedrag) || 0 }]);
     } else {
-      onSave([{ datum, aantal: parseFloat(aantal) || 0, prijs: parseFloat(prijs) || 0, totaal }]);
+      // Bij vreemde valuta: sla EUR totaal op
+      const eurTot = transValuta !== 'EUR' && transWisselkoers ? eurTotaal : totaal;
+      onSave([{
+        datum,
+        aantal: parseFloat(aantal) || 0,
+        prijs: transValuta !== 'EUR' && transWisselkoers
+          ? parseFloat((parseFloat(prijs) * transWisselkoers).toFixed(4))
+          : parseFloat(prijs) || 0,
+        totaal: eurTot || 0,
+        ...(transValuta !== 'EUR' ? { valuta: transValuta, koers_lokaal: parseFloat(prijs) || 0 } : {}),
+      }]);
     }
   };
 
@@ -699,25 +779,68 @@ function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
       )}
 
       {modus === 'enkel' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Datum</label>
-            <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Datum</label>
+              <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Aantal</label>
+              <input type="number" step="0.001" value={aantal} onChange={e => setAantal(e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">
+                Koers {transValuta !== 'EUR' ? transValuta : '(€)'}
+              </label>
+              <input type="number" step="0.0001" value={prijs} onChange={e => setPrijs(e.target.value)}
+                className={`w-full bg-slate-700 border text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 ${
+                  transValuta !== 'EUR' ? 'border-amber-700/50 focus:ring-amber-500' : 'border-slate-600 focus:ring-blue-500'
+                }`} />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Totaal (€)</label>
+              <div className={`border rounded-lg px-2 py-1.5 text-sm font-medium ${
+                transValuta !== 'EUR' && eurTotaal
+                  ? 'bg-emerald-900/20 border-emerald-700/40 text-emerald-300'
+                  : 'bg-slate-700/50 border-slate-700 text-slate-300'
+              }`}>
+                {transValuta !== 'EUR' && eurTotaal
+                  ? `€${eurTotaal.toFixed(2)}`
+                  : totaal > 0 ? `€${totaal.toFixed(2)}` : '—'}
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Aantal</label>
-            <input type="number" step="0.001" value={aantal} onChange={e => setAantal(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Prijs (€)</label>
-            <input type="number" step="0.01" value={prijs} onChange={e => setPrijs(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 block mb-1">Totaal (€)</label>
-            <div className="bg-slate-700/50 border border-slate-700 text-slate-300 rounded-lg px-2 py-1.5 text-sm">{totaal.toFixed(2)}</div>
+          {/* Valuta toggle — compact onder de velden */}
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-xs text-slate-500">Valuta:</span>
+            <div className="flex gap-1">
+              <button type="button" onClick={() => { setTransValuta('EUR'); setTransWisselkoers(null); }}
+                className={`px-2 py-0.5 rounded text-xs transition-colors ${transValuta === 'EUR' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}>
+                € EUR
+              </button>
+              {VALUTA_LIJST.filter(v => v.code !== 'EUR').map(v => (
+                <button key={v.code} type="button"
+                  onClick={() => { setTransValuta(v.code); setTransWisselkoers(null); }}
+                  className={`px-2 py-0.5 rounded text-xs transition-colors ${transValuta === v.code ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}>
+                  {v.symbool} {v.code}
+                </button>
+              ))}
+            </div>
+            {transValuta !== 'EUR' && (
+              <button type="button" onClick={haalTransWisselkoers} disabled={loadingTransWk || !datum}
+                className="ml-auto flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50">
+                {loadingTransWk ? <Loader className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                Koers {datum ? datum.slice(0,10) : ''}
+              </button>
+            )}
+            {transValuta !== 'EUR' && transWisselkoers && (
+              <span className="text-xs text-amber-400/70 ml-1">
+                1 {transValuta} = €{transWisselkoers.toFixed(4)}
+              </span>
+            )}
           </div>
         </div>
       )}
