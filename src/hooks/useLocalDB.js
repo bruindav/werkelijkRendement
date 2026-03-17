@@ -1,3 +1,4 @@
+// Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
 // Dezelfde API als useFirestore zodat alle pagina's ongewijzigd blijven
@@ -333,6 +334,10 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
           verkopen: pos.verkopen || [],
           dividend: pos.dividend || 0,
           rente: 0, kosten: 0,
+          // Valuta info (voor USD/GBP posities)
+          valuta: pos.valuta || 'EUR',
+          jan1_koers_lokaal: pos.jan1_koers_lokaal || 0,
+          dec31_koers_lokaal: pos.dec31_koers_lokaal || 0,
         });
       }
     }
