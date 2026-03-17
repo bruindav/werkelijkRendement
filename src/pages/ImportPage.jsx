@@ -9,8 +9,7 @@ import { importeerBank } from '../hooks/useLocalDB';
 import { parseerPDF, detectBankType } from '../services/pdfParser';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
-import { Upload, FileText, CheckCircle, AlertCircle, Loader, X, ArrowRight, Check, Lock } from 'lucide-react';
-import { useLicentie } from '../hooks/useLicentie';
+import { Upload, FileText, CheckCircle, AlertCircle, Loader, X, ArrowRight, Check } from 'lucide-react';
 
 // ============ PDF TEKST EXTRACTOR ============
 async function laadPdfJs() {
@@ -162,7 +161,6 @@ function BestandKaart({ item, onVerwijder, onToggleRekening, onJaarChange }) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef();
-  const { proActief, limieten } = useLicentie();
   const [bestanden, setBestanden] = useState([]); // array van { id, bestandsnaam, file, status, resultaat, geselecteerd, importJaar, fout }
   const [importStatus, setImportStatus] = useState(null); // null | 'bezig' | 'klaar'
   const [importResultaat, setImportResultaat] = useState(null);
@@ -178,16 +176,6 @@ export default function ImportPage() {
     await laadPdfJs();
 
     let fileArray = Array.from(files).filter(f => f.type === 'application/pdf');
-
-    // Gratis limiet: max 1 PDF totaal (inclusief al geladen bestanden)
-    if (!proActief && limieten) {
-      const resterend = limieten.import - bestanden.filter(b => b.status !== 'fout').length;
-      if (resterend <= 0) {
-        alert('De gratis versie ondersteunt maar 1 PDF. Upgrade naar Pro voor meerdere bestanden.');
-        return;
-      }
-      fileArray = fileArray.slice(0, resterend);
-    }
 
     const nieuw = fileArray
       .map(f => ({
@@ -338,19 +326,6 @@ export default function ImportPage() {
             <p className="text-sm text-slate-400">Upload meerdere PDF's tegelijk — Centraal Beheer, Raisin, DEGIRO, Evi, ABN AMRO, Meewind, Collin</p>
           </div>
         </div>
-
-        {/* Gratis limiet banner */}
-        {!proActief && (
-          <div className="bg-amber-900/20 border border-amber-700/40 rounded-xl px-4 py-3 flex items-center gap-3 mb-4">
-            <Lock size={16} className="text-amber-400 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-xs text-amber-300">
-                <strong>Gratis versie:</strong> max 1 PDF per keer.{' '}
-                <a href="/licentie" className="text-blue-400 hover:text-blue-300 underline">Upgrade naar Pro</a> voor meerdere bestanden tegelijk.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Drop zone — input buiten label, gekoppeld via htmlFor/id (iOS Safari fix) */}
         <input
