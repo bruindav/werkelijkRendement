@@ -639,113 +639,133 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
       </div>
 
       {open && (
-        <div className="border-t border-slate-700 p-4 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: `1 jan ${year} - Aantal`, val: positie.jan1_aantal },
-              { label: `1 jan ${year} - Prijs`, val: formatEuro(positie.jan1_prijs) },
-              { label: `31 dec ${year} - Aantal`, val: positie.dec31_aantal },
-              { label: `31 dec ${year} - Prijs`, val: formatEuro(positie.dec31_prijs) },
-            ].map(({ label, val }) => (
-              <div key={label} className="bg-slate-900/50 rounded-xl p-3">
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className="text-sm font-medium text-white mt-0.5">{val}</p>
+        <div className="border-t border-slate-700 p-3 space-y-3">
+
+          {/* Waarden tabel — compact 3-koloms op mobiel */}
+          <div className="bg-slate-900/50 rounded-xl overflow-hidden">
+            <div className="grid grid-cols-3 text-xs text-slate-500 border-b border-slate-800">
+              <div className="px-3 py-2"></div>
+              <div className="px-3 py-2 text-right border-l border-slate-800">1 jan</div>
+              <div className="px-3 py-2 text-right border-l border-slate-800">31 dec</div>
+            </div>
+            {positie.jan1_aantal > 0 || positie.dec31_aantal > 0 ? (
+              <div className="grid grid-cols-3 text-sm border-b border-slate-800/60">
+                <div className="px-3 py-2 text-slate-400 text-xs flex items-center">Aantal</div>
+                <div className="px-3 py-2 text-right text-white border-l border-slate-800/60">{positie.jan1_aantal}</div>
+                <div className="px-3 py-2 text-right text-white border-l border-slate-800/60">{positie.dec31_aantal}</div>
               </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="bg-slate-900/50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Koersresultaat</p>
-              <p className={`text-sm font-medium mt-0.5 ${r.koersresultaat >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatEuro(r.koersresultaat)}</p>
-            </div>
-            <div className="bg-slate-900/50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Dividend</p>
-              <p className="text-sm font-medium text-white mt-0.5">{formatEuro(positie.dividend)}</p>
-            </div>
-            <div className="bg-slate-900/50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Rente</p>
-              <p className="text-sm font-medium text-white mt-0.5">{formatEuro(positie.rente)}</p>
-            </div>
-            <div className="bg-slate-900/50 rounded-xl p-3">
-              <p className="text-xs text-slate-500">Kosten (aftrekbaar)</p>
-              <p className="text-sm font-medium text-red-400 mt-0.5">-{formatEuro(r.kosten)}</p>
-            </div>
-            <div className="bg-slate-900/50 rounded-xl p-3 col-span-2 sm:col-span-1">
-              <p className="text-xs text-slate-500">Totaal rendement</p>
-              <p className={`text-sm font-bold mt-0.5 ${pos ? 'text-emerald-400' : 'text-red-400'}`}>{formatEuro(r.totaalRendement)}</p>
+            ) : null}
+            {positie.jan1_prijs > 0 || positie.dec31_prijs > 0 ? (
+              <div className="grid grid-cols-3 text-sm border-b border-slate-800/60">
+                <div className="px-3 py-2 text-slate-400 text-xs flex items-center">Koers</div>
+                <div className="px-3 py-2 text-right text-white border-l border-slate-800/60">{formatEuro(positie.jan1_prijs)}</div>
+                <div className="px-3 py-2 text-right text-white border-l border-slate-800/60">{formatEuro(positie.dec31_prijs)}</div>
+              </div>
+            ) : null}
+            <div className="grid grid-cols-3 text-sm">
+              <div className="px-3 py-2 text-slate-400 text-xs flex items-center">Waarde</div>
+              <div className="px-3 py-2 text-right font-medium text-white border-l border-slate-800/60">{formatEuro(r.waardeJan1)}</div>
+              <div className="px-3 py-2 text-right font-medium text-white border-l border-slate-800/60">{formatEuro(r.waardeDec31)}</div>
             </div>
           </div>
 
+          {/* Inkomen & kosten — één compacte regel */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-xs">
+            <span className="text-slate-500">
+              Koersresultaat: <span className={r.koersresultaat >= 0 ? 'text-emerald-400' : 'text-red-400'}>{formatEuro(r.koersresultaat)}</span>
+            </span>
+            {positie.dividend > 0 && (
+              <span className="text-slate-500">Dividend: <span className="text-white">{formatEuro(positie.dividend)}</span></span>
+            )}
+            {positie.rente > 0 && (
+              <span className="text-slate-500">Rente: <span className="text-white">{formatEuro(positie.rente)}</span></span>
+            )}
+            {r.kosten > 0 && (
+              <span className="text-slate-500">Kosten: <span className="text-red-400">-{formatEuro(r.kosten)}</span></span>
+            )}
+            <span className="text-slate-500">
+              Totaal: <span className={`font-semibold ${pos ? 'text-emerald-400' : 'text-red-400'}`}>{formatEuro(r.totaalRendement)}</span>
+            </span>
+          </div>
+
+          {/* Aankopen */}
           <div>
-            <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-slate-300">Aankopen ({positie.aankopen?.length || 0})</p>
-              {positie.maandelijks_bedrag > 0 && (
-                <button
-                  onClick={() => {
-                    const bestaand = positie.aankopen || [];
-                    const heeftAl = bestaand.some(a => a.auto && a.datum?.startsWith(year));
-                    if (heeftAl && !window.confirm('Er zijn al automatische aankopen voor dit jaar. Opnieuw genereren?')) return;
-                    const nieuw = Array.from({length: 12}, (_, i) => ({
-                      datum: `${year}-${String(i+1).padStart(2,'0')}-01`,
-                      aantal: 0, prijs: 0,
-                      totaal: positie.maandelijks_bedrag,
-                      auto: true,
-                    }));
-                    const zonder = bestaand.filter(a => !(a.auto && a.datum?.startsWith(year)));
-                    onUpdate(positie.id, { aankopen: [...zonder, ...nieuw] });
-                  }}
-                  className="text-xs bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 rounded-full px-2 py-0.5 flex items-center gap-1 transition-colors"
-                  title={`Genereer 12 × €${positie.maandelijks_bedrag} automatische aankopen`}
-                >
-                  <Repeat className="w-3 h-3" />
-                  Genereer {year} (12 × €{positie.maandelijks_bedrag})
-                </button>
-              )}
-            </div>
-              <button onClick={() => setToonAankoop(!toonAankoop)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-slate-300">
+                  Aankopen
+                  {positie.aankopen?.length > 0 && (
+                    <span className="ml-1.5 text-xs bg-emerald-900/40 text-emerald-400 px-1.5 py-0.5 rounded-full">
+                      {positie.aankopen.length}
+                    </span>
+                  )}
+                </p>
+                {positie.maandelijks_bedrag > 0 && (
+                  <button
+                    onClick={() => {
+                      const bestaand = positie.aankopen || [];
+                      const heeftAl = bestaand.some(a => a.auto && a.datum?.startsWith(year));
+                      if (heeftAl && !window.confirm('Er zijn al automatische aankopen voor dit jaar. Opnieuw genereren?')) return;
+                      const nieuw = Array.from({length: 12}, (_, i) => ({
+                        datum: `${year}-${String(i+1).padStart(2,'0')}-01`,
+                        aantal: 0, prijs: 0,
+                        totaal: positie.maandelijks_bedrag,
+                        auto: true,
+                      }));
+                      const zonder = bestaand.filter(a => !(a.auto && a.datum?.startsWith(year)));
+                      onUpdate(positie.id, { aankopen: [...zonder, ...nieuw] });
+                    }}
+                    className="text-xs bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 rounded-full px-2 py-0.5 flex items-center gap-1"
+                  >
+                    <Repeat className="w-3 h-3" /> {year}
+                  </button>
+                )}
+              </div>
+              <button onClick={() => setToonAankoop(!toonAankoop)}
+                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
                 <Plus className="w-3 h-3" /> Toevoegen
               </button>
             </div>
             {toonAankoop && <TransactieForm type="aankoop" year={year} onSave={t => voegTransactieToe('aankopen', t)} onCancel={() => setToonAankoop(false)} />}
             {positie.aankopen?.length > 0 && (
-              <div className="space-y-1 mt-2">
+              <div className="space-y-1">
                 {positie.aankopen.map((a, i) => (
-                  <TransactieRij
-                    key={i}
-                    transactie={a}
-                    kleur="emerald"
+                  <TransactieRij key={i} transactie={a} kleur="emerald"
                     onUpdate={(t) => updateTransactie('aankopen', i, t)}
-                    onVerwijder={() => verwijderTransactie('aankopen', i)}
-                  />
+                    onVerwijder={() => verwijderTransactie('aankopen', i)} />
                 ))}
               </div>
             )}
           </div>
 
+          {/* Verkopen */}
           <div>
-            <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-              <p className="text-sm font-medium text-slate-300">Verkopen ({positie.verkopen?.length || 0})</p>
-              <button onClick={() => setToonVerkoop(!toonVerkoop)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-sm font-medium text-slate-300">
+                Verkopen
+                {positie.verkopen?.length > 0 && (
+                  <span className="ml-1.5 text-xs bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded-full">
+                    {positie.verkopen.length}
+                  </span>
+                )}
+              </p>
+              <button onClick={() => setToonVerkoop(!toonVerkoop)}
+                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
                 <Plus className="w-3 h-3" /> Toevoegen
               </button>
             </div>
             {toonVerkoop && <TransactieForm type="verkoop" onSave={t => voegTransactieToe('verkopen', t)} onCancel={() => setToonVerkoop(false)} />}
             {positie.verkopen?.length > 0 && (
-              <div className="space-y-1 mt-2">
+              <div className="space-y-1">
                 {positie.verkopen.map((v, i) => (
-                  <TransactieRij
-                    key={i}
-                    transactie={v}
-                    kleur="red"
+                  <TransactieRij key={i} transactie={v} kleur="red"
                     onUpdate={(t) => updateTransactie('verkopen', i, t)}
-                    onVerwijder={() => verwijderTransactie('verkopen', i)}
-                  />
+                    onVerwijder={() => verwijderTransactie('verkopen', i)} />
                 ))}
               </div>
             )}
           </div>
+
         </div>
       )}
     </div>
