@@ -609,13 +609,21 @@ function TransactieRij({ transactie, type, kleur, jaar, onUpdate, onVerwijder })
 
   const heeftAantalPrijs = transactie.aantal > 0 && transactie.prijs > 0;
   const isAuto = transactie.auto;
+  const heeftLokaleKoers = transactie.koers_lokaal > 0 && transactie.valuta && transactie.valuta !== 'EUR';
 
   return (
     <div className="flex items-center gap-x-3 gap-y-1 bg-slate-900/50 rounded-lg px-3 py-2 text-sm">
       <span className="text-slate-400 text-xs flex-shrink-0">{transactie.datum}</span>
       <span className="flex-1 text-xs text-slate-300">
         {heeftAantalPrijs
-          ? `${transactie.aantal} × ${formatEuro(transactie.prijs)}`
+          ? <>
+              {transactie.aantal} × {formatEuro(transactie.prijs)}
+              {heeftLokaleKoers && (
+                <span className="text-amber-500/70 ml-1">
+                  ({transactie.valuta} {transactie.koers_lokaal.toFixed(2)})
+                </span>
+              )}
+            </>
           : <span className="text-slate-500 italic">bedrag</span>
         }
       </span>
