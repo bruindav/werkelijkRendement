@@ -343,39 +343,23 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
 }
 
 
-function TransactieRij({ transactie, kleur, onUpdate, onVerwijder }) {
+function TransactieRij({ transactie, type, kleur, jaar, onUpdate, onVerwijder }) {
   const [bewerken, setBewerken] = useState(false);
-  const [datum, setDatum] = useState(transactie.datum);
-  const [aantal, setAantal] = useState(transactie.aantal);
-  const [prijs, setPrijs] = useState(transactie.prijs);
-  const totaal = parseFloat(aantal) * parseFloat(prijs) || 0;
-
-  const handleOpslaan = () => {
-    onUpdate({ datum, aantal: parseFloat(aantal), prijs: parseFloat(prijs), totaal });
-    setBewerken(false);
-  };
 
   if (bewerken) {
+    // Gebruik hetzelfde TransactieForm als bij aanmaken, maar met initial waarden
     return (
-      <div className="bg-slate-800 border border-blue-600/40 rounded-lg px-3 py-2">
-        <div className="grid grid-cols-2 gap-2 mb-2">
-          <input type="date" value={datum} onChange={e => setDatum(e.target.value)}
-            className="bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
-          <input type="number" step="0.001" value={aantal} onChange={e => setAantal(e.target.value)}
-            placeholder="Aantal"
-            className="bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
-          <input type="number" step="0.01" value={prijs} onChange={e => setPrijs(e.target.value)}
-            placeholder="Prijs"
-            className="bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
-          <div className="bg-slate-700/50 border border-slate-700 text-slate-300 rounded px-2 py-1 text-xs">{totaal.toFixed(2)}</div>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={handleOpslaan} className="bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 text-xs flex items-center gap-1">
-            <Check className="w-3 h-3" /> Opslaan
-          </button>
-          <button onClick={() => setBewerken(false)} className="text-slate-400 text-xs px-2">Annuleren</button>
-        </div>
-      </div>
+      <TransactieForm
+        type={type}
+        year={jaar}
+        initial={transactie}
+        onSave={(transacties) => {
+          // Bij bewerken altijd eerste item nemen
+          onUpdate(Array.isArray(transacties) ? transacties[0] : transacties);
+          setBewerken(false);
+        }}
+        onCancel={() => setBewerken(false)}
+      />
     );
   }
 
@@ -383,32 +367,47 @@ function TransactieRij({ transactie, kleur, onUpdate, onVerwijder }) {
   const isAuto = transactie.auto;
 
   return (
-    <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-3 gap-y-1 bg-slate-900/50 rounded-lg px-3 py-2 text-sm group">
-      <span className="text-slate-400">{transactie.datum}</span>
-      {heeftAantalPrijs
-        ? <span className="text-slate-300">{transactie.aantal} × {formatEuro(transactie.prijs)}</span>
-        : <span className="text-slate-500 text-xs italic">bedrag</span>
-      }
-      <span className={`text-${kleur}-400 font-medium`}>{formatEuro(transactie.totaal)}</span>
+    <div className="flex items-center gap-x-3 gap-y-1 bg-slate-900/50 rounded-lg px-3 py-2 text-sm">
+      <span className="text-slate-400 text-xs flex-shrink-0">{transactie.datum}</span>
+      <span className="flex-1 text-xs text-slate-300">
+        {heeftAantalPrijs
+          ? `${transactie.aantal} × ${formatEuro(transactie.prijs)}`
+          : <span className="text-slate-500 italic">bedrag</span>
+        }
+      </span>
+      <span className={`text-${kleur}-400 font-medium text-sm flex-shrink-0`}>{formatEuro(transactie.totaal)}</span>
       {isAuto && (
-        <span className="text-xs bg-blue-900/40 text-blue-400 border border-blue-800/40 px-1.5 py-0.5 rounded-full flex items-center gap-1">
-          <Repeat className="w-2.5 h-2.5" /> auto
+        <span className="text-xs bg-blue-900/40 text-blue-400 border border-blue-800/40 px-1.5 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0">
+          <Repeat className="w-2.5 h-2.5" />
         </span>
       )}
-      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={() => setBewerken(true)} className="text-slate-500 hover:text-blue-400 p-0.5"><Edit3 className="w-3 h-3" /></button>
-        <button onClick={onVerwijder} className="text-slate-500 hover:text-red-400 p-0.5"><X className="w-3 h-3" /></button>
+      <div className="flex gap-1 flex-shrink-0">
+        <button onClick={() => setBewerken(true)} className="text-slate-500 hover:text-blue-400 active:text-blue-400 p-1"><Edit3 className="w-3.5 h-3.5" /></button>
+        <button onClick={onVerwijder} className="text-slate-500 hover:text-red-400 active:text-red-400 p-1"><X className="w-3.5 h-3.5" /></button>
       </div>
     </div>
   );
 }
 
-function TransactieForm({ type, onSave, onCancel, year }) {
-  const [modus, setModus] = useState('enkel'); // 'enkel' | 'maandelijks'
-  const [datum, setDatum] = useState('');
-  const [aantal, setAantal] = useState('');
-  const [prijs, setPrijs] = useState('');
-  const [bedrag, setBedrag] = useState(''); // alleen-bedrag modus
+function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
+  // Bij bewerken: detecteer modus op basis van initial data
+  const detectModus = () => {
+    if (!initial) return 'enkel';
+    if (initial.auto) return 'maandelijks';
+    if (initial.aantal === 0 && initial.prijs === 0) return 'bedrag';
+    return 'enkel';
+  };
+
+  // Standaard datum: 1 januari van geselecteerd jaar
+  const standaardDatum = year ? `${year}-01-01` : '';
+
+  const [modus, setModus] = useState(detectModus());
+  const [datum, setDatum] = useState(initial?.datum || standaardDatum);
+  const [aantal, setAantal] = useState(initial?.aantal > 0 ? String(initial.aantal) : '');
+  const [prijs, setPrijs] = useState(initial?.prijs > 0 ? String(initial.prijs) : '');
+  const [bedrag, setBedrag] = useState(
+    initial && initial.aantal === 0 ? String(initial.totaal || '') : ''
+  );
   const [maandBedrag, setMaandBedrag] = useState('');
   const [startMaand, setStartMaand] = useState('1');
   const [eindMaand, setEindMaand] = useState('12');
@@ -560,6 +559,8 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
   const [bewerken, setBewerken] = useState(false);
   const [toonAankoop, setToonAankoop] = useState(false);
   const [toonVerkoop, setToonVerkoop] = useState(false);
+  const [toonAankoopDetail, setToonAankoopDetail] = useState(false);
+  const [toonVerkoopDetail, setToonVerkoopDetail] = useState(false);
 
   const r = berekenPositieRendement(positie);
   const pos = r.totaalRendement >= 0;
@@ -688,83 +689,99 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
             </span>
           </div>
 
-          {/* Aankopen */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-slate-300">
-                  Aankopen
-                  {positie.aankopen?.length > 0 && (
-                    <span className="ml-1.5 text-xs bg-emerald-900/40 text-emerald-400 px-1.5 py-0.5 rounded-full">
-                      {positie.aankopen.length}
+          {/* Aankopen + Verkopen — ingeklapt met totaal, uitklappen voor details */}
+          {(['aankopen', 'verkopen']).map(transType => {
+            const isAankoop = transType === 'aankopen';
+            const lijst = positie[transType] || [];
+            const totaalBedrag = lijst.reduce((s, t) => s + (t.totaal || 0), 0);
+            const kleur = isAankoop ? 'emerald' : 'red';
+            const toonForm = isAankoop ? toonAankoop : toonVerkoop;
+            const setToon = isAankoop ? setToonAankoop : setToonVerkoop;
+            const [uitgeklapt, setUitgeklapt] = isAankoop
+              ? [toonAankoopDetail, setToonAankoopDetail]
+              : [toonVerkoopDetail, setToonVerkoopDetail];
+
+            return (
+              <div key={transType}>
+                {/* Samengevouwen rij */}
+                <div className="flex items-center gap-2 py-1.5">
+                  <button
+                    onClick={() => setUitgeklapt(!uitgeklapt)}
+                    className="flex items-center gap-2 flex-1 text-left"
+                  >
+                    {uitgeklapt
+                      ? <ChevronUp className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                      : <ChevronDown className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />}
+                    <span className="text-sm font-medium text-slate-300">
+                      {isAankoop ? 'Aankopen' : 'Verkopen'}
+                    </span>
+                    {lijst.length > 0 && (
+                      <span className={`text-xs bg-${kleur}-900/40 text-${kleur}-400 px-1.5 py-0.5 rounded-full`}>
+                        {lijst.length}
+                      </span>
+                    )}
+                  </button>
+                  {totaalBedrag > 0 && (
+                    <span className={`text-sm font-semibold text-${kleur}-400`}>
+                      {isAankoop ? '' : '-'}{formatEuro(totaalBedrag)}
                     </span>
                   )}
-                </p>
-                {positie.maandelijks_bedrag > 0 && (
+                  {isAankoop && positie.maandelijks_bedrag > 0 && (
+                    <button
+                      onClick={() => {
+                        const bestaand = positie.aankopen || [];
+                        const heeftAl = bestaand.some(a => a.auto && a.datum?.startsWith(year));
+                        if (heeftAl && !window.confirm('Er zijn al automatische aankopen voor dit jaar. Opnieuw genereren?')) return;
+                        const nieuw = Array.from({length: 12}, (_, i) => ({
+                          datum: `${year}-${String(i+1).padStart(2,'0')}-01`,
+                          aantal: 0, prijs: 0, totaal: positie.maandelijks_bedrag, auto: true,
+                        }));
+                        const zonder = bestaand.filter(a => !(a.auto && a.datum?.startsWith(year)));
+                        onUpdate(positie.id, { aankopen: [...zonder, ...nieuw] });
+                      }}
+                      className="text-xs bg-blue-600/20 text-blue-400 border border-blue-600/30 rounded-full px-1.5 py-0.5 flex items-center gap-0.5 flex-shrink-0"
+                      title="Genereer maandelijkse aankopen"
+                    >
+                      <Repeat className="w-3 h-3" />
+                    </button>
+                  )}
                   <button
-                    onClick={() => {
-                      const bestaand = positie.aankopen || [];
-                      const heeftAl = bestaand.some(a => a.auto && a.datum?.startsWith(year));
-                      if (heeftAl && !window.confirm('Er zijn al automatische aankopen voor dit jaar. Opnieuw genereren?')) return;
-                      const nieuw = Array.from({length: 12}, (_, i) => ({
-                        datum: `${year}-${String(i+1).padStart(2,'0')}-01`,
-                        aantal: 0, prijs: 0,
-                        totaal: positie.maandelijks_bedrag,
-                        auto: true,
-                      }));
-                      const zonder = bestaand.filter(a => !(a.auto && a.datum?.startsWith(year)));
-                      onUpdate(positie.id, { aankopen: [...zonder, ...nieuw] });
-                    }}
-                    className="text-xs bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/30 rounded-full px-2 py-0.5 flex items-center gap-1"
+                    onClick={() => { setToon(!toonForm); setUitgeklapt(true); }}
+                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 flex-shrink-0"
                   >
-                    <Repeat className="w-3 h-3" /> {year}
+                    <Plus className="w-3 h-3" />
                   </button>
-                )}
-              </div>
-              <button onClick={() => setToonAankoop(!toonAankoop)}
-                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                <Plus className="w-3 h-3" /> Toevoegen
-              </button>
-            </div>
-            {toonAankoop && <TransactieForm type="aankoop" year={year} onSave={t => voegTransactieToe('aankopen', t)} onCancel={() => setToonAankoop(false)} />}
-            {positie.aankopen?.length > 0 && (
-              <div className="space-y-1">
-                {positie.aankopen.map((a, i) => (
-                  <TransactieRij key={i} transactie={a} kleur="emerald"
-                    onUpdate={(t) => updateTransactie('aankopen', i, t)}
-                    onVerwijder={() => verwijderTransactie('aankopen', i)} />
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
 
-          {/* Verkopen */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-sm font-medium text-slate-300">
-                Verkopen
-                {positie.verkopen?.length > 0 && (
-                  <span className="ml-1.5 text-xs bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded-full">
-                    {positie.verkopen.length}
-                  </span>
+                {/* Formulier */}
+                {toonForm && (
+                  <TransactieForm
+                    type={isAankoop ? 'aankoop' : 'verkoop'}
+                    year={year}
+                    onSave={t => voegTransactieToe(transType, t)}
+                    onCancel={() => setToon(false)}
+                  />
                 )}
-              </p>
-              <button onClick={() => setToonVerkoop(!toonVerkoop)}
-                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                <Plus className="w-3 h-3" /> Toevoegen
-              </button>
-            </div>
-            {toonVerkoop && <TransactieForm type="verkoop" onSave={t => voegTransactieToe('verkopen', t)} onCancel={() => setToonVerkoop(false)} />}
-            {positie.verkopen?.length > 0 && (
-              <div className="space-y-1">
-                {positie.verkopen.map((v, i) => (
-                  <TransactieRij key={i} transactie={v} kleur="red"
-                    onUpdate={(t) => updateTransactie('verkopen', i, t)}
-                    onVerwijder={() => verwijderTransactie('verkopen', i)} />
-                ))}
+
+                {/* Detail regels — alleen als uitgeklapt */}
+                {uitgeklapt && lijst.length > 0 && (
+                  <div className="space-y-1 mt-1">
+                    {lijst.map((t, i) => (
+                      <TransactieRij
+                        key={i}
+                        transactie={t}
+                        type={isAankoop ? 'aankoop' : 'verkoop'}
+                        kleur={kleur}
+                        jaar={year}
+                        onUpdate={(nieuw) => updateTransactie(transType, i, nieuw)}
+                        onVerwijder={() => verwijderTransactie(transType, i)}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })}
 
         </div>
       )}
