@@ -386,10 +386,14 @@ function parseDegiro(text) {
   const decPosties = parseBlok('Portefeuilleoverzicht per 31-12-', null);
 
   // Koppel jan en dec op ISIN/naam, bouw posities
-  const posities = [];
-  const decMap = new Map(decPosties.map(p => [p.isin || p.naam, p]));
+  // Verwijder cash/valuta posities VOOR de koppeling — die komen als rekening-courant terug
+  const janBelegging = janPosties.filter(p => p.type !== 'valuta');
+  const decBelegging = decPosties.filter(p => p.type !== 'valuta');
 
-  for (const jan of janPosties) {
+  const posities = [];
+  const decMap = new Map(decBelegging.map(p => [p.isin || p.naam, p]));
+
+  for (const jan of janBelegging) {
     const dec = decMap.get(jan.isin || jan.naam) || {};
     // Dividend per positie: niet beschikbaar per aandeel in DEGIRO PDF,
     // verdeeld over totaal — Cash positie krijgt 0
@@ -433,8 +437,8 @@ function parseDegiro(text) {
   const flatexJan1    = flatexMatch ? parseBedrag(flatexMatch[2]) : 0;
   const flatexDec31   = flatexMatch ? parseBedrag(flatexMatch[3]) : 0;
 
-  // Verwijder Cash positie uit beleggingen (staat al als rekening-courant)
-  const beleggingPosities = posities.filter(p => p.type !== 'valuta');
+  // posities bevat al geen cash (gefilterd voor de koppeling)
+  const beleggingPosities = posities;
 
   const rekeningen = [];
 
