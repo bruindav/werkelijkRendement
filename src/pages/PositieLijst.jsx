@@ -596,6 +596,7 @@ function TransactieRij({ transactie, type, kleur, jaar, onUpdate, onVerwijder })
         type={type}
         year={jaar}
         initial={transactie}
+        positieValuta={transactie.valuta || 'EUR'}
         onSave={(transacties) => {
           // Bij bewerken altijd eerste item nemen
           onUpdate(Array.isArray(transacties) ? transacties[0] : transacties);
@@ -632,7 +633,10 @@ function TransactieRij({ transactie, type, kleur, jaar, onUpdate, onVerwijder })
   );
 }
 
-function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
+function TransactieForm({ type, onSave, onCancel, year, initial = null, positieValuta = 'EUR' }) {
+  // positieValuta: doorgegeven vanuit PositieKaart — geen aparte keuze nodig
+  const isVreemdValuta = positieValuta && positieValuta !== 'EUR';
+
   const detectModus = () => {
     if (!initial) return 'enkel';
     if (initial.auto) return 'maandelijks';
@@ -645,7 +649,10 @@ function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
   const [modus, setModus] = useState(detectModus());
   const [datum, setDatum] = useState(initial?.datum || standaardDatum);
   const [aantal, setAantal] = useState(initial?.aantal > 0 ? String(initial.aantal) : '');
-  const [prijs, setPrijs] = useState(initial?.prijs > 0 ? String(initial.prijs) : '');
+  const [prijs, setPrijs] = useState(
+    initial?.koers_lokaal > 0 ? String(initial.koers_lokaal) : // bij vreemde valuta: lokale koers tonen
+    initial?.prijs > 0 ? String(initial.prijs) : ''
+  );
   const [bedrag, setBedrag] = useState(
     initial && initial.aantal === 0 ? String(initial.totaal || '') : ''
   );
@@ -653,16 +660,13 @@ function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
   const [startMaand, setStartMaand] = useState('1');
   const [eindMaand, setEindMaand] = useState('12');
   const totaal = parseFloat(aantal) * parseFloat(prijs) || 0;
-  // Valuta voor transacties
-  const [transValuta, setTransValuta] = useState('EUR');
-  const [transWisselkoers, setTransWisselkoers] = useState(null); // EUR per 1 vreemde munt
+  // Wisselkoers voor vreemde valuta — ophalen op datum
+  const [transWisselkoers, setTransWisselkoers] = useState(null);
   const [loadingTransWk, setLoadingTransWk] = useState(false);
-  const lokaalTotaal = parseFloat(aantal) * parseFloat(prijs) || 0;
-  const eurTotaal = transValuta !== 'EUR' && transWisselkoers
-    ? lokaalTotaal * transWisselkoers : null;
+  const eurTotaal = isVreemdValuta && transWisselkoers ? totaal * transWisselkoers : null;
 
   const haalTransWisselkoers = async () => {
-    const valutaInfo = VALUTA_LIJST.find(v => v.code === transValuta);
+    const valutaInfo = VALUTA_LIJST.find(v => v.code === positieValuta);
     if (!valutaInfo?.ticker || !datum) return;
     setLoadingTransWk(true);
     try {
@@ -689,15 +693,15 @@ function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
       onSave([{ datum, aantal: 0, prijs: 0, totaal: parseFloat(bedrag) || 0 }]);
     } else {
       // Bij vreemde valuta: sla EUR totaal op
-      const eurTot = transValuta !== 'EUR' && transWisselkoers ? eurTotaal : totaal;
+      const eurTot = isVreemdValuta && transWisselkoers ? eurTotaal : totaal;
       onSave([{
         datum,
         aantal: parseFloat(aantal) || 0,
-        prijs: transValuta !== 'EUR' && transWisselkoers
+        prijs: isVreemdValuta && transWisselkoers
           ? parseFloat((parseFloat(prijs) * transWisselkoers).toFixed(4))
           : parseFloat(prijs) || 0,
         totaal: eurTot || 0,
-        ...(transValuta !== 'EUR' ? { valuta: transValuta, koers_lokaal: parseFloat(prijs) || 0 } : {}),
+        ...(isVreemdValuta ? { valuta: positieValuta, koers_lokaal: parseFloat(prijs) || 0 } : {}),
       }]);
     }
   };
@@ -793,55 +797,43 @@ function TransactieForm({ type, onSave, onCancel, year, initial = null }) {
             </div>
             <div>
               <label className="text-xs text-slate-400 block mb-1">
-                Koers {transValuta !== 'EUR' ? transValuta : '(€)'}
+                Koers {isVreemdValuta ? positieValuta : '(€)'}
               </label>
               <input type="number" step="0.0001" value={prijs} onChange={e => setPrijs(e.target.value)}
                 className={`w-full bg-slate-700 border text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 ${
-                  transValuta !== 'EUR' ? 'border-amber-700/50 focus:ring-amber-500' : 'border-slate-600 focus:ring-blue-500'
+                  isVreemdValuta ? 'border-amber-700/50 focus:ring-amber-500' : 'border-slate-600 focus:ring-blue-500'
                 }`} />
             </div>
             <div>
               <label className="text-xs text-slate-400 block mb-1">Totaal (€)</label>
               <div className={`border rounded-lg px-2 py-1.5 text-sm font-medium ${
-                transValuta !== 'EUR' && eurTotaal
+                isVreemdValuta && eurTotaal
                   ? 'bg-emerald-900/20 border-emerald-700/40 text-emerald-300'
                   : 'bg-slate-700/50 border-slate-700 text-slate-300'
               }`}>
-                {transValuta !== 'EUR' && eurTotaal
+                {isVreemdValuta && eurTotaal
                   ? `€${eurTotaal.toFixed(2)}`
                   : totaal > 0 ? `€${totaal.toFixed(2)}` : '—'}
               </div>
             </div>
           </div>
-          {/* Valuta toggle — compact onder de velden */}
-          <div className="flex items-center gap-2 pt-1">
-            <span className="text-xs text-slate-500">Valuta:</span>
-            <div className="flex gap-1">
-              <button type="button" onClick={() => { setTransValuta('EUR'); setTransWisselkoers(null); }}
-                className={`px-2 py-0.5 rounded text-xs transition-colors ${transValuta === 'EUR' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}>
-                € EUR
-              </button>
-              {VALUTA_LIJST.filter(v => v.code !== 'EUR').map(v => (
-                <button key={v.code} type="button"
-                  onClick={() => { setTransValuta(v.code); setTransWisselkoers(null); }}
-                  className={`px-2 py-0.5 rounded text-xs transition-colors ${transValuta === v.code ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}>
-                  {v.symbool} {v.code}
-                </button>
-              ))}
-            </div>
-            {transValuta !== 'EUR' && (
-              <button type="button" onClick={haalTransWisselkoers} disabled={loadingTransWk || !datum}
-                className="ml-auto flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50">
+          {/* Wisselkoers knop — alleen als positie in vreemde valuta */}
+          {isVreemdValuta && (
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-xs text-amber-400/70">💱 {positieValuta}</span>
+              <button type="button" onClick={haalTransWisselkoers}
+                disabled={loadingTransWk || !datum}
+                className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50">
                 {loadingTransWk ? <Loader className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
-                Koers {datum ? datum.slice(0,10) : ''}
+                Wisselkoers op {datum ? datum.slice(0,10) : 'datum'}
               </button>
-            )}
-            {transValuta !== 'EUR' && transWisselkoers && (
-              <span className="text-xs text-amber-400/70 ml-1">
-                1 {transValuta} = €{transWisselkoers.toFixed(4)}
-              </span>
-            )}
-          </div>
+              {transWisselkoers && (
+                <span className="text-xs text-amber-400/70">
+                  1 {positieValuta} = €{transWisselkoers.toFixed(4)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1082,6 +1074,7 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
                   <TransactieForm
                     type={isAankoop ? 'aankoop' : 'verkoop'}
                     year={year}
+                    positieValuta={positie.valuta || 'EUR'}
                     onSave={t => voegTransactieToe(transType, t)}
                     onCancel={() => setToon(false)}
                   />

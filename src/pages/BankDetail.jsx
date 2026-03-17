@@ -1,3 +1,4 @@
+// Fix113 - SpaarDepositoForm compact met saldi-tabel
 // Fix106 - Rekening-courant type toegevoegd
 // Fix105 - Gratis limiet: max 2 rekeningen per bank
 // Fix 20 - Spaar/deposito inline in BankDetail, geen apart niveau
@@ -158,42 +159,56 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
   );
 
   return (
-    <div className="border-t border-slate-700 bg-slate-900/60 p-4 space-y-4">
-      {/* Saldi */}
-      <div>
-        <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">💰 Saldo {year}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {inp('Saldo 1 januari (€)', 'jan1_saldo')}
-          {inp('Saldo 31 december (€)', 'dec31_saldo')}
+    <div className="border-t border-slate-700 bg-slate-900/60 p-4 space-y-3">
+
+      {/* Saldi — compacte tabel net als beleggingen */}
+      <div className="bg-slate-900/40 rounded-xl overflow-hidden">
+        <div className="grid grid-cols-[auto_1fr_1fr] text-xs text-slate-500 border-b border-slate-800">
+          <div className="px-3 py-2 w-28" />
+          <div className="px-3 py-2 text-right border-l border-slate-800">1 jan {year}</div>
+          <div className="px-3 py-2 text-right border-l border-slate-800">31 dec {year}</div>
+        </div>
+        <div className="grid grid-cols-[auto_1fr_1fr]">
+          <div className="px-3 py-2 w-28 text-xs text-slate-400 flex items-center">Saldo (€)</div>
+          <div className="px-2 py-1.5 border-l border-slate-800/60">
+            <input type="number" step="0.01" value={form.jan1_saldo}
+              onChange={e => set('jan1_saldo', e.target.value)}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div className="px-2 py-1.5 border-l border-slate-800/60">
+            <input type="number" step="0.01" value={form.dec31_saldo}
+              onChange={e => set('dec31_saldo', e.target.value)}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
         </div>
       </div>
 
       {/* Deposito looptijd + startbedrag */}
       {isDeposito && (
-        <div>
-          <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">🔒 Looptijd deposito</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-slate-900/40 rounded-xl p-3 space-y-2">
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">🔒 Looptijd</p>
+          <div className="grid grid-cols-2 gap-2">
             {inp('Startdatum', 'deposito_startdatum', { type: 'date' })}
             {inp('Einddatum', 'deposito_einddatum', { type: 'date' })}
           </div>
-          <div className="mt-3">
+          <div>
             <label className="block text-xs text-slate-400 mb-1">
-              Startbedrag / inleg (€) <span className="text-slate-500">— basis voor eindbedrag berekening</span>
+              Startbedrag (€) <span className="text-slate-500">voor eindbedrag berekening</span>
             </label>
             <input type="number" step="0.01" value={form.startbedrag}
               onChange={e => set('startbedrag', e.target.value)}
-              placeholder={form.jan1_saldo ? `Leeg = gebruik saldo 1 jan (${form.jan1_saldo})` : 'bijv. 5000'}
-              className="w-full sm:w-64 bg-slate-700 border border-amber-700/40 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              placeholder={form.jan1_saldo ? `Leeg = saldo 1 jan (${form.jan1_saldo})` : 'bijv. 5000'}
+              className="w-full bg-slate-700 border border-amber-700/40 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
           </div>
         </div>
       )}
 
-      {/* Rente */}
-      <div>
-        <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">📈 Rente</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Rente — compacte 2x2 grid */}
+      <div className="bg-slate-900/40 rounded-xl p-3 space-y-2">
+        <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">📈 Rente</p>
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Rente % (per jaar)</label>
+            <label className="block text-xs text-slate-400 mb-1">Rente % / jaar</label>
             <div className="relative">
               <input type="number" step="0.001" value={form.rente_pct}
                 onChange={e => set('rente_pct', e.target.value)}
@@ -210,9 +225,8 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
           </div>
           <div>
             <label className="block text-xs text-slate-400 mb-1">
-              Ontvangen rente {year} (€)
-              {verwachtRente !== null &&
-                <span className="ml-1 text-emerald-500 text-xs">≈ {fmt(verwachtRente)}</span>}
+              Ontvangen rente (€)
+              {verwachtRente !== null && <span className="ml-1 text-emerald-500 text-xs">≈ {fmt(verwachtRente)}</span>}
             </label>
             <div className="flex gap-1">
               <input type="number" step="0.01" value={form.ontvangen_rente}
@@ -225,7 +239,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Kosten (€) <span className="text-slate-500">aftrekbaar</span></label>
+            <label className="block text-xs text-slate-400 mb-1">Kosten (€)</label>
             <input type="number" step="0.01" value={form.kosten}
               onChange={e => set('kosten', e.target.value)} placeholder="0.00"
               className="w-full bg-slate-700 border border-red-900/40 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
