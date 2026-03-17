@@ -1,3 +1,5 @@
+// Fix106 - Rekening-courant type toegevoegd
+// Fix105 - Gratis limiet: max 2 rekeningen per bank
 // Fix 20 - Spaar/deposito inline in BankDetail, geen apart niveau
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -6,6 +8,7 @@ import { useRekeningen, useBank } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
 import { CreditCard, TrendingUp, PiggyBank, Lock, Plus, Trash2, ArrowRight,
          X, Check, Edit3, ChevronDown, ChevronUp, Calculator, Percent } from 'lucide-react';
+import { useLicentie } from '../hooks/useLicentie';
 import DragLijst, { DragHandle } from '../components/DragLijst';
 
 const fmt = (v) => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(v || 0);
@@ -495,6 +498,8 @@ export default function BankDetail() {
   const { user } = useApp();
   const bank = useBank(user?.uid, year, bankId);
   const { rekeningen, loading, voegRekeningToe, updateRekening, verwijderRekening, slaVolgorde } = useRekeningen(user?.uid, year, bankId);
+  const { proActief, limieten } = useLicentie();
+  const [limietFout, setLimietFout] = useState('');
   const [toonForm, setToonForm] = useState(false);
 
   const handleVerwijder = async (rek) => {
@@ -523,7 +528,16 @@ export default function BankDetail() {
       {toonForm && (
         <div className="mb-4">
           <RekeningForm
-            onSave={async (data) => { await voegRekeningToe(data); setToonForm(false); }}
+            onSave={async (data) => {
+              try {
+                await voegRekeningToe(data);
+                setToonForm(false);
+                setLimietFout('');
+              } catch(e) {
+                if (e.message.startsWith('LIMIET')) setLimietFout('rekeningen');
+                else throw e;
+              }
+            }}
             onCancel={() => setToonForm(false)} />
         </div>
       )}
@@ -540,6 +554,25 @@ export default function BankDetail() {
           </button>
         </div>
       ) : (
+        <>
+        {limietFout === 'rekeningen' && (
+          <div className="bg-amber-900/20 border border-amber-700/40 rounded-xl px-4 py-3 flex items-start gap-3 mb-2">
+            <Lock size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-amber-300 font-medium">Gratis limiet bereikt</p>
+              <p className="text-xs text-amber-400/70 mt-0.5">
+                De gratis versie ondersteunt max {limieten?.maxRekeningen} rekeningen per bank.
+              </p>
+              <a href="/licentie" className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block">
+                Upgrade naar Pro →
+              </a>
+            </div>
+            <button onClick={() => setLimietFout('')} className="text-slate-500 hover:text-white">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         <DragLijst
           items={rekeningen}
           onVolgorde={slaVolgorde}
@@ -555,6 +588,7 @@ export default function BankDetail() {
             />
           )}
         />
+        </>
       )}
     </div>
   );

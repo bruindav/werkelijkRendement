@@ -370,7 +370,7 @@ export default function Dashboard() {
 
                 {/* Rekeningen onder de bank */}
                 {bank.rekeningen.map(rek => {
-                  const typeEmoji = rek.type === 'beleggen' ? '📈' : rek.type === 'deposito' ? '🔒' : '🏦';
+                  const typeEmoji = rek.type === 'beleggen' ? '📈' : rek.type === 'deposito' ? '🔒' : rek.type === 'rekening-courant' ? '💳' : '🏦';
                   return (
                     <Link
                       key={rek.id}
