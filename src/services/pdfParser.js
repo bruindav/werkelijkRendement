@@ -327,6 +327,7 @@ export async function parseEviPDF(file) {
 
 // ============ DEGIRO ============
 // Fix106 - DEGIRO: Flatex Geldrekening als aparte rekening-courant
+// Fix109 - DEGIRO: USD/GBP koers opslaan als EUR-equivalent, valuta bewaren
 function parseDegiro(text) {
   const jaarMatch = text.match(/jaaroverzicht (\d{4})/i);
   const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
@@ -360,12 +361,22 @@ function parseDegiro(text) {
       }
       // Positie met ISIN
       const posM = l.match(
-        /^(.+?)\s+([A-Z]{2}[A-Z0-9]{10})\s+(Aandeel|ETF|Obligatie|Fonds)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+(?:EUR|USD|GBP)\s+([\d.,]+)$/
+        /^(.+?)\s+([A-Z]{2}[A-Z0-9]{10})\s+(Aandeel|ETF|Obligatie|Fonds)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+(EUR|USD|GBP)\s+([\d.,]+)$/
       );
       if (posM) {
-        const [, naam, isin, ptype, aantal, koers, , waarde_eur] = posM;
-        posities.push({ naam: naam.trim(), isin, type: ptype.toLowerCase(),
-          aantal: parseInt(aantal), koers: parseBedrag(koers), waarde_eur: parseBedrag(waarde_eur) });
+        const [, naam, isin, ptype, aantalStr, koersLok, , valuta, waarde_eur] = posM;
+        const aantalNum = parseInt(aantalStr);
+        const waardeEur = parseBedrag(waarde_eur);
+        // EUR-equivalent koers: waarde_eur / aantal (zodat koers × aantal = waarde klopt)
+        const koersEur = aantalNum > 0 ? waardeEur / aantalNum : 0;
+        posities.push({
+          naam: naam.trim(), isin, type: ptype.toLowerCase(),
+          aantal: aantalNum,
+          koers: koersEur,              // EUR koers (voor correcte berekening)
+          koers_lokaal: parseBedrag(koersLok), // originele USD/GBP koers
+          valuta: valuta,               // 'EUR', 'USD' of 'GBP'
+          waarde_eur: waardeEur,
+        });
       }
     }
     return posities;
@@ -388,11 +399,14 @@ function parseDegiro(text) {
       type: jan.isin ? (jan.type === 'etf' ? 'etf' : jan.type === 'obligatie' ? 'obligatie' : 'aandeel') : 'overig',
       jan1_waarde: jan.waarde_eur,
       jan1_aantal: jan.aantal,
-      jan1_prijs: jan.koers,
+      jan1_prijs: jan.koers,           // EUR-equivalent koers
       dec31_waarde: dec.waarde_eur || 0,
       dec31_aantal: dec.aantal || 0,
-      dec31_prijs: dec.koers || 0,
-      dividend: 0, // totaal dividend staat apart, niet per aandeel
+      dec31_prijs: dec.koers || 0,     // EUR-equivalent koers
+      valuta: jan.valuta || 'EUR',
+      jan1_koers_lokaal: jan.koers_lokaal || 0,   // USD/GBP koers voor display
+      dec31_koers_lokaal: dec.koers_lokaal || 0,
+      dividend: 0,
     });
     decMap.delete(jan.isin || jan.naam);
   }
@@ -403,6 +417,9 @@ function parseDegiro(text) {
       type: dec.isin ? (dec.type === 'etf' ? 'etf' : dec.type === 'obligatie' ? 'obligatie' : 'aandeel') : 'overig',
       jan1_waarde: 0, jan1_aantal: 0, jan1_prijs: 0,
       dec31_waarde: dec.waarde_eur, dec31_aantal: dec.aantal, dec31_prijs: dec.koers,
+      valuta: dec.valuta || 'EUR',
+      jan1_koers_lokaal: 0,
+      dec31_koers_lokaal: dec.koers_lokaal || 0,
       dividend: 0,
     });
   }
