@@ -609,6 +609,11 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-white">{positie.naam}</span>
             <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">{positie.type}</span>
+            {positie.valuta && positie.valuta !== 'EUR' && (
+              <span className="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/40 px-2 py-0.5 rounded-full">
+                💱 {positie.valuta}
+              </span>
+            )}
             {positie.maandelijks_bedrag > 0 && (
               <span className="text-xs bg-blue-900/40 text-blue-400 border border-blue-800/40 px-2 py-0.5 rounded-full flex items-center gap-1">
                 <Repeat className="w-2.5 h-2.5" /> €{positie.maandelijks_bedrag}/mnd
@@ -658,9 +663,23 @@ function PositieKaart({ positie, year, onUpdate, onVerwijder }) {
             ) : null}
             {positie.jan1_prijs > 0 || positie.dec31_prijs > 0 ? (
               <div className="grid grid-cols-3 text-sm border-b border-slate-800/60">
-                <div className="px-3 py-2 text-slate-400 text-xs flex items-center">Koers</div>
-                <div className="px-3 py-2 text-right text-white border-l border-slate-800/60">{formatEuro(positie.jan1_prijs)}</div>
-                <div className="px-3 py-2 text-right text-white border-l border-slate-800/60">{formatEuro(positie.dec31_prijs)}</div>
+                <div className="px-3 py-2 text-slate-400 text-xs flex items-center">
+                  Koers {positie.valuta && positie.valuta !== 'EUR' && (
+                    <span className="ml-1 text-amber-500/70">€</span>
+                  )}
+                </div>
+                <div className="px-3 py-2 text-right border-l border-slate-800/60">
+                  <div className="text-white">{formatEuro(positie.jan1_prijs)}</div>
+                  {positie.valuta !== 'EUR' && positie.jan1_koers_lokaal > 0 && (
+                    <div className="text-xs text-amber-500/70">{positie.valuta} {positie.jan1_koers_lokaal.toFixed(2)}</div>
+                  )}
+                </div>
+                <div className="px-3 py-2 text-right border-l border-slate-800/60">
+                  <div className="text-white">{formatEuro(positie.dec31_prijs)}</div>
+                  {positie.valuta !== 'EUR' && positie.dec31_koers_lokaal > 0 && (
+                    <div className="text-xs text-amber-500/70">{positie.valuta} {positie.dec31_koers_lokaal.toFixed(2)}</div>
+                  )}
+                </div>
               </div>
             ) : null}
             <div className="grid grid-cols-3 text-sm">
