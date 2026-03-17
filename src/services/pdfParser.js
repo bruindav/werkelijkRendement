@@ -326,6 +326,7 @@ export async function parseEviPDF(file) {
 }
 
 // ============ DEGIRO ============
+// Fix106 - DEGIRO: Flatex Geldrekening als aparte rekening-courant
 function parseDegiro(text) {
   const jaarMatch = text.match(/jaaroverzicht (\d{4})/i);
   const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
@@ -406,19 +407,46 @@ function parseDegiro(text) {
     });
   }
 
-  return {
-    bank: 'DEGIRO',
-    type: 'degiro',
-    jaar,
-    rekeningen: [{
-      naam: `Beleggingsrekening (${account})`,
-      weergave_naam: 'Beleggingsrekening',
-      type: 'beleggen',
-      rekeningnummer: account,
-      dividend_totaal: divBruto, // bruto dividend totaal op rekening-niveau
-      posities,
-    }]
-  };
+  // Flatex Geldrekening (kassaldo) — apart opvoeren als rekening-courant
+  // De saldi staan in het Flatex jaarverslag sectie
+  const flatexMatch = text.match(
+    /EUR\s+\(([A-Z0-9]+)\)\s+([\d.,]+)\s+EUR\s+([\d.,]+)\s+EUR/
+  );
+  const flatexIban    = flatexMatch ? flatexMatch[1] : '';
+  const flatexJan1    = flatexMatch ? parseBedrag(flatexMatch[2]) : 0;
+  const flatexDec31   = flatexMatch ? parseBedrag(flatexMatch[3]) : 0;
+
+  // Verwijder Cash positie uit beleggingen (staat al als rekening-courant)
+  const beleggingPosities = posities.filter(p => p.type !== 'valuta');
+
+  const rekeningen = [];
+
+  // Rekening-courant (Flatex Geldrekening) — alleen als er data is
+  if (flatexJan1 > 0 || flatexDec31 > 0) {
+    rekeningen.push({
+      naam: `Flatex Geldrekening (${flatexIban || account})`,
+      weergave_naam: 'Flatex Geldrekening',
+      type: 'rekening-courant',
+      rekeningnummer: flatexIban || account,
+      jan1_saldo:  flatexJan1,
+      dec31_saldo: flatexDec31,
+      ontvangen_rente: 0,
+      rente_pct: 0, kosten: 0,
+      notitie: 'DEGIRO kassaldo / flatexDEGIRO Geldrekening',
+    });
+  }
+
+  // Beleggingsrekening
+  rekeningen.push({
+    naam: `Beleggingsrekening (${account})`,
+    weergave_naam: 'Beleggingsrekening',
+    type: 'beleggen',
+    rekeningnummer: account,
+    dividend_totaal: divBruto,
+    posities: beleggingPosities,
+  });
+
+  return { bank: 'DEGIRO', type: 'degiro', jaar, rekeningen };
 }
 
 // ============ COLLIN CROWDFUND ============
