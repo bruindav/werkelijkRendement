@@ -1,6 +1,5 @@
 // Fix102 - Multi-file import — meerdere PDF bestanden tegelijk
-// Fix104 - Mobiele import fix
-// Fix104 - Mobiele import fix: label+htmlFor patroon voor iOS Safari
+// Fix104 - Mobiele import fix: files direct opslaan voor async (Android Chrome fix)
 // Fix105 - Gratis limiet: max 1 PDF
 import { useState, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
@@ -173,26 +172,27 @@ export default function ImportPage() {
 
   // ============ VERWERK BESTANDEN ============
   const verwerkBestanden = async (files) => {
-    await laadPdfJs();
+    // files is al een Array (vanuit onFileChange) of FileList (vanuit drop)
+    const fileArray = (Array.isArray(files) ? files : Array.from(files))
+      .filter(f => f.type === 'application/pdf' || f.name?.toLowerCase().endsWith('.pdf'));
 
-    let fileArray = Array.from(files).filter(f => f.type === 'application/pdf');
+    if (fileArray.length === 0) return;
 
-    const nieuw = fileArray
-      .map(f => ({
-        id: Math.random().toString(36).slice(2),
-        bestandsnaam: f.name,
-        file: f,
-        status: 'laden',
-        resultaat: null,
-        geselecteerd: {},
-        importJaar: defaultJaar(),
-        fout: '',
-      }));
-
-    if (nieuw.length === 0) return;
-
-    if (nieuw.length === 0) return;
+    // Maak nieuw[] direct aan en zet in state VOORDAT we async laden
+    const nieuw = fileArray.map(f => ({
+      id: Math.random().toString(36).slice(2),
+      bestandsnaam: f.name,
+      file: f,
+      status: 'laden',
+      resultaat: null,
+      geselecteerd: {},
+      importJaar: defaultJaar(),
+      fout: '',
+    }));
     setBestanden(prev => [...prev, ...nieuw]);
+
+    // Nu pas async dingen doen
+    await laadPdfJs();
 
     // Verwerk elk bestand
     for (const item of nieuw) {
@@ -231,8 +231,13 @@ export default function ImportPage() {
   };
 
   const onFileChange = (e) => {
-    if (e.target.files?.length) verwerkBestanden(e.target.files);
+    const files = e.target.files;
+    if (!files?.length) return;
+    // Kopieer File objecten direct naar array VOOR e.target.value reset
+    // Android Chrome geeft file referenties vrij na een async await
+    const fileArray = Array.from(files);
     e.target.value = '';
+    verwerkBestanden(fileArray);
   };
 
   const onDrop = useCallback((e) => {
