@@ -9,7 +9,7 @@ import { useApp } from '../context/AppContext';
 import { usePosities, useBank, useRekening } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
 import { berekenPositieRendement, formatEuro, formatPct } from '../services/berekening';
-import { zoekAandeel, haalKoersenVoorJaar } from '../services/koersApi';
+import { zoekAandeel, haalKoersenVoorJaar, haalHistorischeKoers } from '../services/koersApi';
 import { Plus, Trash2, ChevronDown, ChevronUp, Search, TrendingUp, Edit3, Check, X, Loader, Calendar, Repeat, Info } from 'lucide-react';
 
 const TYPES = ['aandeel', 'obligatie', 'etf', 'anders'];
@@ -113,12 +113,85 @@ function TickerInfoPopup() {
   );
 }
 
+
+// ============ VALUTA SELECTOR ============
+const VALUTA_LIJST = [
+  { code: 'EUR', label: 'Euro',            symbool: '€', ticker: null },
+  { code: 'USD', label: 'US Dollar',       symbool: '$', ticker: 'EURUSD=X' },
+  { code: 'GBP', label: 'Brits Pond',      symbool: '£', ticker: 'EURGBP=X' },
+  { code: 'CHF', label: 'Zwitserse Frank', symbool: 'Fr', ticker: 'EURCHF=X' },
+  { code: 'JPY', label: 'Japanse Yen',     symbool: '¥', ticker: 'EURJPY=X' },
+  { code: 'CAD', label: 'Canadese Dollar', symbool: 'C$', ticker: 'EURCAD=X' },
+];
+
+function ValutaSelector({ valuta, onChange, onWisselkoersOphalen, loadingWisselkoers }) {
+  const [open, setOpen] = useState(false);
+  const huidig = VALUTA_LIJST.find(v => v.code === valuta) || VALUTA_LIJST[0];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+          valuta !== 'EUR'
+            ? 'bg-amber-900/30 border-amber-700/50 text-amber-400'
+            : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
+        }`}
+        title="Valuta wijzigen"
+      >
+        <span>{huidig.symbool}</span>
+        <span className="text-xs">{huidig.code}</span>
+        <ChevronDown className="w-3 h-3 opacity-60" />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-9 z-20 w-52 bg-slate-800 border border-slate-600 rounded-xl shadow-xl overflow-hidden">
+            <p className="text-xs text-slate-500 px-3 pt-2.5 pb-1.5 border-b border-slate-700">Valuta kiezen</p>
+            {VALUTA_LIJST.map(v => (
+              <button
+                key={v.code}
+                onClick={() => { onChange(v.code); setOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left transition-colors hover:bg-slate-700 ${
+                  v.code === valuta ? 'bg-blue-900/30 text-blue-300' : 'text-slate-300'
+                }`}
+              >
+                <span className="w-6 text-center font-medium">{v.symbool}</span>
+                <span className="flex-1">{v.label}</span>
+                <span className="text-xs text-slate-500">{v.code}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Wisselkoers ophalen knop — alleen voor niet-EUR */}
+      {valuta !== 'EUR' && (
+        <button
+          type="button"
+          onClick={onWisselkoersOphalen}
+          disabled={loadingWisselkoers}
+          className="mt-1.5 flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50"
+        >
+          {loadingWisselkoers
+            ? <Loader className="w-3 h-3 animate-spin" />
+            : <Search className="w-3 h-3" />}
+          Wisselkoers ophalen
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PositieForm({ onSave, onCancel, year, initial = null }) {
   const [form, setForm] = useState({
     naam: initial?.naam || '',
     type: initial?.type || 'aandeel',
     ticker: initial?.ticker || '',
     isin: initial?.isin || '',
+    valuta: initial?.valuta || 'EUR',
     jan1_aantal: initial?.jan1_aantal || '',
     jan1_prijs: initial?.jan1_prijs || '',
     jan1_waarde: initial?.jan1_waarde || '',
@@ -131,6 +204,8 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     maandelijks_bedrag: initial?.maandelijks_bedrag || '',
   });
   const [loadingKoers, setLoadingKoers] = useState(false);
+  const [loadingWisselkoers, setLoadingWisselkoers] = useState(false);
+  const [wisselkoersen, setWisselkoersen] = useState({ jan1: null, dec31: null }); // EUR per 1 vreemde munt
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -161,16 +236,64 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     setLoadingKoers(true);
     try {
       const { jan1, dec31 } = await haalKoersenVoorJaar(form.ticker, year);
+      // Haal ook wisselkoers op als valuta != EUR
+      let wk = wisselkoersen;
+      if (form.valuta !== 'EUR') {
+        const valutaInfo = VALUTA_LIJST.find(v => v.code === form.valuta);
+        if (valutaInfo?.ticker) {
+          const wkJan = await haalHistorischeKoers(valutaInfo.ticker, `${year}-01-02`);
+          const wkDec = await haalHistorischeKoers(valutaInfo.ticker, `${year}-12-30`);
+          // EURUSD=X geeft USD per EUR, wij willen EUR per USD → 1/koers
+          wk = {
+            jan1: wkJan ? 1 / wkJan.slotkoers : null,
+            dec31: wkDec ? 1 / wkDec.slotkoers : null,
+          };
+          setWisselkoersen(wk);
+        }
+      }
       if (jan1) {
-        set('jan1_prijs', jan1.slotkoers.toString());
-        if (form.jan1_aantal) set('jan1_waarde', (parseFloat(form.jan1_aantal) * jan1.slotkoers).toFixed(2));
+        const koers = form.valuta !== 'EUR' && wk.jan1
+          ? (jan1.slotkoers * wk.jan1).toFixed(4)  // lokale koers → EUR
+          : jan1.slotkoers.toString();
+        set('jan1_prijs', koers);
+        if (form.jan1_aantal) set('jan1_waarde', (parseFloat(form.jan1_aantal) * parseFloat(koers)).toFixed(2));
       }
       if (dec31) {
-        set('dec31_prijs', dec31.slotkoers.toString());
-        if (form.dec31_aantal) set('dec31_waarde', (parseFloat(form.dec31_aantal) * dec31.slotkoers).toFixed(2));
+        const koers = form.valuta !== 'EUR' && wk.dec31
+          ? (dec31.slotkoers * wk.dec31).toFixed(4)
+          : dec31.slotkoers.toString();
+        set('dec31_prijs', koers);
+        if (form.dec31_aantal) set('dec31_waarde', (parseFloat(form.dec31_aantal) * parseFloat(koers)).toFixed(2));
       }
     } catch (e) { console.error('Koersen ophalen mislukt:', e); }
     setLoadingKoers(false);
+  };
+
+  const haalWisselkoers = async () => {
+    const valutaInfo = VALUTA_LIJST.find(v => v.code === form.valuta);
+    if (!valutaInfo?.ticker) return;
+    setLoadingWisselkoers(true);
+    try {
+      const wkJan = await haalHistorischeKoers(valutaInfo.ticker, `${year}-01-02`);
+      const wkDec = await haalHistorischeKoers(valutaInfo.ticker, `${year}-12-30`);
+      const wk = {
+        jan1: wkJan ? 1 / wkJan.slotkoers : null,
+        dec31: wkDec ? 1 / wkDec.slotkoers : null,
+      };
+      setWisselkoersen(wk);
+      // Herbereken waarden als prijs al ingevuld
+      if (wk.jan1 && form.jan1_prijs) {
+        const eurPrijs = (parseFloat(form.jan1_prijs) * wk.jan1).toFixed(4);
+        set('jan1_prijs', eurPrijs);
+        if (form.jan1_aantal) set('jan1_waarde', (parseFloat(form.jan1_aantal) * parseFloat(eurPrijs)).toFixed(2));
+      }
+      if (wk.dec31 && form.dec31_prijs) {
+        const eurPrijs = (parseFloat(form.dec31_prijs) * wk.dec31).toFixed(4);
+        set('dec31_prijs', eurPrijs);
+        if (form.dec31_aantal) set('dec31_waarde', (parseFloat(form.dec31_aantal) * parseFloat(eurPrijs)).toFixed(2));
+      }
+    } catch (e) { console.error('Wisselkoers ophalen mislukt:', e); }
+    setLoadingWisselkoers(false);
   };
 
   const handleSelectAandeel = (r) => {
@@ -199,6 +322,7 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
     if (!form.naam) return;
     onSave({
       naam: form.naam, type: form.type, ticker: form.ticker, isin: form.isin,
+      valuta: form.valuta || 'EUR',
       jan1_aantal: parseFloat(form.jan1_aantal) || 0,
       jan1_prijs: parseFloat(form.jan1_prijs) || 0,
       jan1_waarde: parseFloat(form.jan1_waarde) || 0,
@@ -268,21 +392,79 @@ function PositieForm({ onSave, onCancel, year, initial = null }) {
         </button>
       )}
 
-      <div>
-        <p className="text-sm font-medium text-slate-300 mb-3">📅 Waarden per 1 januari {year}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {numField('Aantal', 'jan1_aantal', 'jan1')}
-          {numField('Prijs (€)', 'jan1_prijs', 'jan1')}
-          {numField('Waarde (€)', 'jan1_waarde', 'jan1', true)}
-        </div>
+      {/* Valuta selector */}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-slate-400">Valuta positie:</span>
+        <ValutaSelector
+          valuta={form.valuta}
+          onChange={v => set('valuta', v)}
+          onWisselkoersOphalen={haalWisselkoers}
+          loadingWisselkoers={loadingWisselkoers}
+        />
+        {form.valuta !== 'EUR' && wisselkoersen.jan1 && (
+          <span className="text-xs text-amber-400/70">
+            1 {form.valuta} = €{wisselkoersen.jan1.toFixed(4)} (1 jan)
+          </span>
+        )}
       </div>
 
-      <div>
-        <p className="text-sm font-medium text-slate-300 mb-3">📅 Waarden per 31 december {year}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {numField('Aantal', 'dec31_aantal', 'dec31')}
-          {numField('Prijs (€)', 'dec31_prijs', 'dec31')}
-          {numField('Waarde (€)', 'dec31_waarde', 'dec31', true)}
+      {/* Waarden — compacte 2-koloms layout */}
+      <div className="bg-slate-900/40 rounded-xl overflow-hidden">
+        {/* Header */}
+        <div className="grid grid-cols-[auto_1fr_1fr] text-xs text-slate-500 border-b border-slate-800">
+          <div className="px-3 py-2 w-20"></div>
+          <div className="px-3 py-2 text-right border-l border-slate-800">1 jan {year}</div>
+          <div className="px-3 py-2 text-right border-l border-slate-800">31 dec {year}</div>
+        </div>
+        {/* Aantal rij */}
+        <div className="grid grid-cols-[auto_1fr_1fr] border-b border-slate-800/60">
+          <div className="px-3 py-2 w-20 text-xs text-slate-400 flex items-center">Aantal</div>
+          <div className="px-2 py-1.5 border-l border-slate-800/60">
+            <input type="number" step="0.001" value={form.jan1_aantal}
+              onChange={e => set('jan1_aantal', e.target.value)}
+              onBlur={() => berekenWaarde('jan1')}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div className="px-2 py-1.5 border-l border-slate-800/60">
+            <input type="number" step="0.001" value={form.dec31_aantal}
+              onChange={e => set('dec31_aantal', e.target.value)}
+              onBlur={() => berekenWaarde('dec31')}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+        </div>
+        {/* Prijs rij */}
+        <div className="grid grid-cols-[auto_1fr_1fr] border-b border-slate-800/60">
+          <div className="px-3 py-2 w-20 text-xs text-slate-400 flex items-center">
+            Prijs {form.valuta !== 'EUR' ? <span className="ml-0.5 text-amber-500/70 text-xs">€</span> : '(€)'}
+          </div>
+          <div className="px-2 py-1.5 border-l border-slate-800/60">
+            <input type="number" step="0.0001" value={form.jan1_prijs}
+              onChange={e => set('jan1_prijs', e.target.value)}
+              onBlur={() => berekenWaarde('jan1')}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div className="px-2 py-1.5 border-l border-slate-800/60">
+            <input type="number" step="0.0001" value={form.dec31_prijs}
+              onChange={e => set('dec31_prijs', e.target.value)}
+              onBlur={() => berekenWaarde('dec31')}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+        </div>
+        {/* Waarde rij */}
+        <div className="grid grid-cols-[auto_1fr_1fr]">
+          <div className="px-3 py-2 w-20 text-xs text-slate-400 flex items-center">Waarde (€)</div>
+          <div className="px-2 py-1.5 border-l border-slate-800/60">
+            <input type="number" step="0.01" value={form.jan1_waarde}
+              onChange={e => set('jan1_waarde', e.target.value)}
+              onBlur={() => berekenAantal('jan1')}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div className="px-2 py-1.5 border-l border-slate-800/60">
+            <input type="number" step="0.01" value={form.dec31_waarde}
+              onChange={e => set('dec31_waarde', e.target.value)}
+              onBlur={() => berekenAantal('dec31')}
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
         </div>
       </div>
 
