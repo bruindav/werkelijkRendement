@@ -1,3 +1,4 @@
+// Fix105 - Gratis limieten: max 1 jaar, max 2 banken
 // JaarOverzicht met drag & drop volgorde
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -5,7 +6,7 @@ import { useApp } from '../context/AppContext';
 import { useBanken } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
 import DragLijst, { DragHandle } from '../components/DragLijst';
-import { Building2, Plus, Trash2, ArrowRight, X, Check, Edit3 } from 'lucide-react';
+import { Building2, Plus, Trash2, ArrowRight, X, Check, Edit3, Lock } from 'lucide-react';
 
 function BankForm({ onSave, onCancel, initial = {} }) {
   const [naam, setNaam] = useState(initial.naam || '');
@@ -127,6 +128,9 @@ export default function JaarOverzicht() {
           </button>
         </div>
       ) : (
+        <>
+        {/* Bank-limiet melding */}
+
         <DragLijst
           items={banken}
           onVolgorde={handleVolgorde}
@@ -140,6 +144,7 @@ export default function JaarOverzicht() {
             />
           )}
         />
+        </>
       )}
     </div>
   );
