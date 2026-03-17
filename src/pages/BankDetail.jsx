@@ -1,4 +1,5 @@
 // Fix113 - SpaarDepositoForm compact met saldi-tabel
+// Fix115 - Saldo invoervelden ruimer voor grote bedragen
 // Fix106 - Rekening-courant type toegevoegd
 // Fix105 - Gratis limiet: max 2 rekeningen per bank
 // Fix 20 - Spaar/deposito inline in BankDetail, geen apart niveau
@@ -170,15 +171,17 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
         </div>
         <div className="grid grid-cols-[auto_1fr_1fr]">
           <div className="px-3 py-2 w-28 text-xs text-slate-400 flex items-center">Saldo (€)</div>
-          <div className="px-2 py-1.5 border-l border-slate-800/60">
+          <div className="px-2 py-2 border-l border-slate-800/60">
             <input type="number" step="0.01" value={form.jan1_saldo}
               onChange={e => set('jan1_saldo', e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              placeholder="0.00"
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div className="px-2 py-1.5 border-l border-slate-800/60">
+          <div className="px-2 py-2 border-l border-slate-800/60">
             <input type="number" step="0.01" value={form.dec31_saldo}
               onChange={e => set('dec31_saldo', e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              placeholder="0.00"
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
       </div>
