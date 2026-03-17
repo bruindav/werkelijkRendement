@@ -23,16 +23,6 @@ export function useBanken(_uid, year) {
   }, [laad]);
 
   const voegBankToe = async (data) => {
-    // Gratis limiet: max 2 banken per jaar
-    const { isPro } = await import('../services/licentie');
-    const pro = await isPro();
-    if (!pro) {
-      const count = await db.banken.where('year').equals(String(year)).count();
-      const { GRATIS_LIMIETEN } = await import('../services/licentie');
-      if (count >= GRATIS_LIMIETEN.maxBanken) {
-        throw new Error(`LIMIET:banken:${GRATIS_LIMIETEN.maxBanken}`);
-      }
-    }
     const id = genId();
     const count = await db.banken.where('year').equals(String(year)).count();
     await db.banken.add({ id, year: String(year), volgorde: count, ...data });
@@ -83,15 +73,6 @@ export function useRekeningen(_uid, year, bankId) {
   }, [laad]);
 
   const voegRekeningToe = async (data) => {
-    // Gratis limiet: max 2 rekeningen per bank
-    const { isPro, GRATIS_LIMIETEN } = await import('../services/licentie');
-    const pro = await isPro();
-    if (!pro) {
-      const count = await db.rekeningen.filter(r => r.bankId === bankId && r.year === String(year)).count();
-      if (count >= GRATIS_LIMIETEN.maxRekeningen) {
-        throw new Error(`LIMIET:rekeningen:${GRATIS_LIMIETEN.maxRekeningen}`);
-      }
-    }
     const id = genId();
     const count = await db.rekeningen.filter(r => r.bankId === bankId && r.year === String(year)).count();
     await db.rekeningen.add({ id, year: String(year), bankId, volgorde: count, ...data });
