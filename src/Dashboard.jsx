@@ -1,6 +1,6 @@
 // Fix116 - Dashboard: sparen/beleggen split, toggle bank specificatie
 // Fix100 - getDoc Firebase vervangen door getInstellingen localDb
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken, getDashboardData } from '../hooks/useLocalDB';
@@ -34,48 +34,75 @@ function StatCard({ label, value, sub, color = 'blue', icon }) {
 // Compacte mobiele samenvatting — één kaart met alles
 function MobieleSamenvatting({ totalen, rendementPositief, selectedYear }) {
   const pct = totalen.totaalVermogenJan1 > 0
-    ? (totalen.totaalRendement / totalen.totaalVermogenJan1) * 100
-    : 0;
+    ? (totalen.totaalRendement / totalen.totaalVermogenJan1) * 100 : 0;
   return (
-    <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 mb-6 sm:hidden">
-      {/* Vermogen rij */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-center flex-1">
-          <p className="text-xs text-slate-500 mb-0.5">1 jan</p>
-          <p className="text-base font-bold text-white">{formatEuro(totalen.totaalVermogenJan1)}</p>
-        </div>
-        <div className="text-slate-600 px-2">→</div>
-        <div className="text-center flex-1">
-          <p className="text-xs text-slate-500 mb-0.5">31 dec</p>
-          <p className="text-base font-bold text-white">{formatEuro(totalen.totaalVermogenDec31)}</p>
-        </div>
-      </div>
-      {/* Scheidingslijn */}
-      <div className="border-t border-slate-700 my-3" />
-      {/* Rendement + belasting rij */}
-      <div className="flex items-center justify-between">
-        <div className="text-center flex-1">
-          <p className="text-xs text-slate-500 mb-0.5">Rendement</p>
-          <p className={`text-base font-bold ${rendementPositief ? 'text-emerald-400' : 'text-red-400'}`}>
-            {rendementPositief ? '+' : ''}{formatEuro(totalen.totaalRendement)}
-          </p>
-          <p className="text-xs text-slate-600 mt-0.5">{formatPct(pct)}</p>
-        </div>
-        <div className="w-px h-10 bg-slate-700 mx-2" />
-        <div className="text-center flex-1">
-          <p className="text-xs text-slate-500 mb-0.5">Belasting werkelijk</p>
-          <p className="text-base font-bold text-red-400">{formatEuro(totalen.vergelijk.werkelijk.belasting)}</p>
-          <p className="text-xs text-slate-600 mt-0.5">vs {formatEuro(totalen.vergelijk.forfaitair.belasting)} forfaitair</p>
-        </div>
-        <div className="w-px h-10 bg-slate-700 mx-2" />
-        <div className="text-center flex-1">
-          <p className="text-xs text-slate-500 mb-0.5">Voordeligst</p>
-          <p className={`text-xs font-bold ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'text-emerald-400' : 'text-amber-400'}`}>
-            {totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? '✓ Werkelijk' : '✓ Forfaitair'}
-          </p>
-          <p className="text-xs text-slate-600 mt-0.5">-{formatEuro(totalen.vergelijk.voordeel)}</p>
+    <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 mb-6 sm:hidden space-y-3">
+
+      {/* Vermogen — sparen + beleggen split */}
+      <div>
+        <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Vermogen</p>
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">🏦 Sparen 1 jan</span>
+            <span className="text-slate-300">{formatEuro(totalen.totaalSparenJan1)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">📈 Beleggen 1 jan</span>
+            <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenJan1)}</span>
+          </div>
+          <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-0.5">
+            <span className="text-slate-400 font-medium">Totaal 1 jan</span>
+            <span className="text-white font-bold">{formatEuro(totalen.totaalVermogenJan1)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400 font-medium">Totaal 31 dec</span>
+            <span className="text-white font-bold">{formatEuro(totalen.totaalVermogenDec31)}</span>
+          </div>
         </div>
       </div>
+
+      <div className="border-t border-slate-700" />
+
+      {/* Rendement — sparen + beleggen split */}
+      <div>
+        <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Werkelijk rendement</p>
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">🏦 Sparen</span>
+            <span className={totalen.totaalRendementSparen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+              {totalen.totaalRendementSparen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementSparen)}
+            </span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">📈 Beleggen</span>
+            <span className={totalen.totaalRendementBeleggen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+              {totalen.totaalRendementBeleggen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementBeleggen)}
+            </span>
+          </div>
+          <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-0.5">
+            <span className="text-slate-400 font-medium">Totaal</span>
+            <span className={`font-bold ${rendementPositief ? 'text-emerald-400' : 'text-red-400'}`}>
+              {rendementPositief ? '+' : ''}{formatEuro(totalen.totaalRendement)} ({formatPct(pct)})
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-700" />
+
+      {/* Belasting */}
+      <div className="flex justify-between items-center">
+        <div className="space-y-1">
+          <div className="flex gap-4 text-xs">
+            <span className="text-slate-500">Werkelijk: <span className="text-red-400 font-medium">{formatEuro(totalen.vergelijk.werkelijk.belasting)}</span></span>
+            <span className="text-slate-500">Forfaitair: <span className="text-slate-300">{formatEuro(totalen.vergelijk.forfaitair.belasting)}</span></span>
+          </div>
+        </div>
+        <span className={`text-xs font-bold ml-3 ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'text-emerald-400' : 'text-amber-400'}`}>
+          {totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? '✓ Werkelijk' : '✓ Forfaitair'}
+        </span>
+      </div>
+
     </div>
   );
 }
@@ -86,11 +113,13 @@ export default function Dashboard() {
   const [totalen, setTotalen] = useState(null);
   const [loadingTotalen, setLoadingTotalen] = useState(true);
   const [instellingen, setInstellingen] = useState(null);
+  const instellingenRef = React.useRef(null);
 
   // Laad gebruikersinstellingen eenmalig (niet bij elke render opnieuw)
   useEffect(() => {
     getInstellingen().then(data => {
       const inst = data ? { ...data } : {};
+      instellingenRef.current = inst;
       setInstellingen(prev => {
         if (JSON.stringify(prev) === JSON.stringify(inst)) return prev;
         return inst;
@@ -186,7 +215,7 @@ export default function Dashboard() {
       }
 
       const vermogenSplit = { sparen: totaalSparenJan1, beleggen: totaalBeleggenJan1 };
-      const vergelijk = vergelijkMethoden(totaalRendement, totaalVermogenJan1, selectedYear, instellingen, vermogenSplit);
+      const vergelijk = vergelijkMethoden(totaalRendement, totaalVermogenJan1, selectedYear, instellingenRef.current, vermogenSplit);
       setTotalen({ totaalRendement, totaalVermogenJan1, totaalVermogenDec31, aantalPosities, vergelijk, vermogenSplit,
         totaalSparenJan1, totaalSparenDec31, totaalBeleggenJan1, totaalBeleggenDec31,
         totaalRendementSparen, totaalRendementBeleggen,
@@ -196,7 +225,7 @@ export default function Dashboard() {
 
     laadTotalen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(','), instellingen]);
+  }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(',')]);
 
   const rendementPositief = totalen?.totaalRendement >= 0;
   const [mobieleKolom, setMobieleKolom] = useState('rendement'); // 'jan1' | 'dec31' | 'rendement'
