@@ -1,3 +1,4 @@
+// Versie: Fix117
 // Fix117 - Disclaimer pagina
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';

@@ -1,3 +1,4 @@
+// Versie: Fix116/118/119/120/121/122
 // Fix116 - Dashboard: sparen/beleggen split, toggle bank specificatie
 // Fix100 - getDoc Firebase vervangen door getInstellingen localDb
 import { useState, useEffect, useRef } from 'react';
