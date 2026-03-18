@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, HelpCircle, Lock, ChevronDown, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, HelpCircle, Lock, Star, Scale, ChevronDown, Menu, X } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
 
@@ -54,8 +54,10 @@ export default function Layout({ children }) {
 
   // Secundaire nav items — onderaan sidebar
   const navItemsSecundair = [
+    { to: '/licentie', icon: Star, label: 'Licentie', exact: true },
     { to: '/help', icon: HelpCircle, label: 'Help', exact: true },
     { to: '/privacy', icon: Lock, label: 'Privacy & Gegevens', exact: true },
+    { to: '/disclaimer', icon: Scale, label: 'Disclaimer', exact: true },
   ];
 
   return (
