@@ -38,34 +38,28 @@ function MobieleSamenvatting({ totalen, rendementPositief, selectedYear }) {
   return (
     <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 mb-6 sm:hidden space-y-3">
 
-      {/* Vermogen — sparen + beleggen split met beide peildata */}
+      {/* Vermogen — tabel met 1 jan / 31 dec kolommen */}
       <div>
         <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Vermogen</p>
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">🏦 Sparen 1 jan</span>
-            <span className="text-slate-300">{formatEuro(totalen.totaalSparenJan1)}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">🏦 Sparen 31 dec</span>
-            <span className="text-slate-300">{formatEuro(totalen.totaalSparenDec31)}</span>
-          </div>
-          <div className="flex justify-between text-xs mt-0.5">
-            <span className="text-slate-500">📈 Beleggen 1 jan</span>
-            <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenJan1)}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">📈 Beleggen 31 dec</span>
-            <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenDec31)}</span>
-          </div>
-          <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1">
-            <span className="text-slate-400 font-medium">Totaal 1 jan</span>
-            <span className="text-white font-bold">{formatEuro(totalen.totaalVermogenJan1)}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400 font-medium">Totaal 31 dec</span>
-            <span className="text-white font-bold">{formatEuro(totalen.totaalVermogenDec31)}</span>
-          </div>
+        <div className="grid grid-cols-[auto_1fr_1fr] text-xs gap-y-1">
+          {/* Header */}
+          <div />
+          <div className="text-right text-slate-500 pb-1">1 jan</div>
+          <div className="text-right text-slate-500 pb-1">31 dec</div>
+          {/* Sparen */}
+          <div className="text-slate-400 pr-2">🏦 Sparen</div>
+          <div className="text-right text-slate-300">{formatEuroGeheel(totalen.totaalSparenJan1)}</div>
+          <div className="text-right text-slate-300">{formatEuroGeheel(totalen.totaalSparenDec31)}</div>
+          {/* Beleggen */}
+          <div className="text-slate-400 pr-2 mt-0.5">📈 Beleggen</div>
+          <div className="text-right text-slate-300 mt-0.5">{formatEuroGeheel(totalen.totaalBeleggenJan1)}</div>
+          <div className="text-right text-slate-300 mt-0.5">{formatEuroGeheel(totalen.totaalBeleggenDec31)}</div>
+          {/* Scheidingslijn */}
+          <div className="col-span-3 border-t border-slate-700/50 my-1" />
+          {/* Totaal */}
+          <div className="text-slate-400 font-medium pr-2">Totaal</div>
+          <div className="text-right text-white font-bold">{formatEuroGeheel(totalen.totaalVermogenJan1)}</div>
+          <div className="text-right text-white font-bold">{formatEuroGeheel(totalen.totaalVermogenDec31)}</div>
         </div>
       </div>
 
@@ -268,31 +262,20 @@ export default function Dashboard() {
               <p className="text-sm text-slate-400 mb-3 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-blue-400" /> Vermogen
               </p>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">🏦 Sparen 1 jan</span>
-                  <span className="text-slate-300">{formatEuro(totalen.totaalSparenJan1)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">🏦 Sparen 31 dec</span>
-                  <span className="text-slate-300">{formatEuro(totalen.totaalSparenDec31)}</span>
-                </div>
-                <div className="flex justify-between text-xs mt-0.5">
-                  <span className="text-slate-500">📈 Beleggen 1 jan</span>
-                  <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenJan1)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">📈 Beleggen 31 dec</span>
-                  <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenDec31)}</span>
-                </div>
-                <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1.5">
-                  <span className="text-slate-400 font-medium">Totaal 1 jan</span>
-                  <span className="text-white font-bold">{formatEuro(totalen.totaalVermogenJan1)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400 font-medium">Totaal 31 dec</span>
-                  <span className="text-white font-bold">{formatEuro(totalen.totaalVermogenDec31)}</span>
-                </div>
+              <div className="grid grid-cols-[auto_1fr_1fr] text-xs gap-y-1">
+                <div />
+                <div className="text-right text-slate-500 pb-1">1 jan</div>
+                <div className="text-right text-slate-500 pb-1">31 dec</div>
+                <div className="text-slate-400 pr-3">🏦 Sparen</div>
+                <div className="text-right text-slate-300">{formatEuroGeheel(totalen.totaalSparenJan1)}</div>
+                <div className="text-right text-slate-300">{formatEuroGeheel(totalen.totaalSparenDec31)}</div>
+                <div className="text-slate-400 pr-3 mt-0.5">📈 Beleggen</div>
+                <div className="text-right text-slate-300 mt-0.5">{formatEuroGeheel(totalen.totaalBeleggenJan1)}</div>
+                <div className="text-right text-slate-300 mt-0.5">{formatEuroGeheel(totalen.totaalBeleggenDec31)}</div>
+                <div className="col-span-3 border-t border-slate-700/50 my-1.5" />
+                <div className="text-slate-400 font-medium pr-3">Totaal</div>
+                <div className="text-right text-white font-bold">{formatEuroGeheel(totalen.totaalVermogenJan1)}</div>
+                <div className="text-right text-white font-bold">{formatEuroGeheel(totalen.totaalVermogenDec31)}</div>
               </div>
             </div>
 
