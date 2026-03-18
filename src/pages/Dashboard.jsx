@@ -1,6 +1,6 @@
 // Fix116 - Dashboard: sparen/beleggen split, toggle bank specificatie
 // Fix100 - getDoc Firebase vervangen door getInstellingen localDb
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken, getDashboardData } from '../hooks/useLocalDB';
@@ -38,7 +38,7 @@ function MobieleSamenvatting({ totalen, rendementPositief, selectedYear }) {
   return (
     <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 mb-6 sm:hidden space-y-3">
 
-      {/* Vermogen — sparen + beleggen split */}
+      {/* Vermogen — sparen + beleggen split met beide peildata */}
       <div>
         <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Vermogen</p>
         <div className="space-y-1">
@@ -47,10 +47,18 @@ function MobieleSamenvatting({ totalen, rendementPositief, selectedYear }) {
             <span className="text-slate-300">{formatEuro(totalen.totaalSparenJan1)}</span>
           </div>
           <div className="flex justify-between text-xs">
+            <span className="text-slate-500">🏦 Sparen 31 dec</span>
+            <span className="text-slate-300">{formatEuro(totalen.totaalSparenDec31)}</span>
+          </div>
+          <div className="flex justify-between text-xs mt-0.5">
             <span className="text-slate-500">📈 Beleggen 1 jan</span>
             <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenJan1)}</span>
           </div>
-          <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-0.5">
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-500">📈 Beleggen 31 dec</span>
+            <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenDec31)}</span>
+          </div>
+          <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1">
             <span className="text-slate-400 font-medium">Totaal 1 jan</span>
             <span className="text-white font-bold">{formatEuro(totalen.totaalVermogenJan1)}</span>
           </div>
@@ -113,11 +121,13 @@ export default function Dashboard() {
   const [totalen, setTotalen] = useState(null);
   const [loadingTotalen, setLoadingTotalen] = useState(true);
   const [instellingen, setInstellingen] = useState(null);
+  const instellingenRef = React.useRef(null);
 
   // Laad gebruikersinstellingen eenmalig (niet bij elke render opnieuw)
   useEffect(() => {
     getInstellingen().then(data => {
       const inst = data ? { ...data } : {};
+      instellingenRef.current = inst;
       setInstellingen(prev => {
         if (JSON.stringify(prev) === JSON.stringify(inst)) return prev;
         return inst;
@@ -213,7 +223,7 @@ export default function Dashboard() {
       }
 
       const vermogenSplit = { sparen: totaalSparenJan1, beleggen: totaalBeleggenJan1 };
-      const vergelijk = vergelijkMethoden(totaalRendement, totaalVermogenJan1, selectedYear, instellingen, vermogenSplit);
+      const vergelijk = vergelijkMethoden(totaalRendement, totaalVermogenJan1, selectedYear, instellingenRef.current, vermogenSplit);
       setTotalen({ totaalRendement, totaalVermogenJan1, totaalVermogenDec31, aantalPosities, vergelijk, vermogenSplit,
         totaalSparenJan1, totaalSparenDec31, totaalBeleggenJan1, totaalBeleggenDec31,
         totaalRendementSparen, totaalRendementBeleggen,
@@ -223,7 +233,7 @@ export default function Dashboard() {
 
     laadTotalen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(','), instellingen]);
+  }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(',')]);
 
   const rendementPositief = totalen?.totaalRendement >= 0;
   const [mobieleKolom, setMobieleKolom] = useState('rendement'); // 'jan1' | 'dec31' | 'rendement'
@@ -260,12 +270,20 @@ export default function Dashboard() {
               </p>
               <div className="space-y-1.5">
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Sparen 1 jan</span>
+                  <span className="text-slate-500">🏦 Sparen 1 jan</span>
                   <span className="text-slate-300">{formatEuro(totalen.totaalSparenJan1)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Beleggen 1 jan</span>
+                  <span className="text-slate-500">🏦 Sparen 31 dec</span>
+                  <span className="text-slate-300">{formatEuro(totalen.totaalSparenDec31)}</span>
+                </div>
+                <div className="flex justify-between text-xs mt-0.5">
+                  <span className="text-slate-500">📈 Beleggen 1 jan</span>
                   <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenJan1)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">📈 Beleggen 31 dec</span>
+                  <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenDec31)}</span>
                 </div>
                 <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1.5">
                   <span className="text-slate-400 font-medium">Totaal 1 jan</span>
