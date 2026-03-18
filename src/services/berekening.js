@@ -1,3 +1,4 @@
+// Versie: Fix122
 // Forfaitaire percentages per jaar (Belastingdienst)
 export const FORFAITAIR_TARIEVEN = {
   2021: { spaargeld: 0.0003, beleggingen: 0.0556, schulden: 0.0246, belasting: 0.31 },
@@ -176,6 +177,11 @@ export function berekenForfaitairSplit(vermogenSparen, vermogenBeleggen, jaar, i
   };
 }
 
+
+export function formatEuroGeheel(bedrag) {
+  if (bedrag === undefined || bedrag === null || isNaN(bedrag)) return '—';
+  return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Math.round(bedrag));
+}
 
 export function formatEuro(amount) {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(amount || 0);
