@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken, getDashboardData } from '../hooks/useLocalDB';
-import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
+import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatEuroGeheel, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
 import { getInstellingen } from '../services/localDb';
 import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle } from 'lucide-react';
 
