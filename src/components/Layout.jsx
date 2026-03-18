@@ -1,3 +1,4 @@
+// Versie: Fix117
 // Fix103b - Secundaire nav items (Help + Privacy) correct gerenderd in sidebar
 // Fix 10 - Jaar switchen navigeert mee
 import { useState } from 'react';
