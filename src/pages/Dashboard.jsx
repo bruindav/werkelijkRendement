@@ -121,7 +121,7 @@ export default function Dashboard() {
   const [totalen, setTotalen] = useState(null);
   const [loadingTotalen, setLoadingTotalen] = useState(true);
   const [instellingen, setInstellingen] = useState(null);
-  const instellingenRef = React.useRef(null);
+  const instellingenRef = useRef(null);
 
   // Laad gebruikersinstellingen eenmalig (niet bij elke render opnieuw)
   useEffect(() => {
