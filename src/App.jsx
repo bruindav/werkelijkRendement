@@ -11,7 +11,9 @@ import ImportPage from './pages/ImportPage';
 import InstellingenPage from './pages/InstellingenPage';
 import BackupPage from './pages/BackupPage';
 import PrivacyPage from './pages/PrivacyPage';
+import LicentiePage from './pages/LicentiePage';
 import HelpPage from './pages/HelpPage';
+import DisclaimerPage from './pages/DisclaimerPage';
 
 const Laden = () => (
   <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -45,7 +47,9 @@ function AppRoutes() {
       <Route path="/instellingen" element={<AuthGuardNoLayout><InstellingenPage /></AuthGuardNoLayout>} />
       <Route path="/backup" element={<AuthGuardNoLayout><BackupPage /></AuthGuardNoLayout>} />
       <Route path="/privacy" element={<AuthGuardNoLayout><PrivacyPage /></AuthGuardNoLayout>} />
+      <Route path="/licentie" element={<AuthGuardNoLayout><LicentiePage /></AuthGuardNoLayout>} />
       <Route path="/help" element={<AuthGuardNoLayout><HelpPage /></AuthGuardNoLayout>} />
+      <Route path="/disclaimer" element={<AuthGuardNoLayout><DisclaimerPage /></AuthGuardNoLayout>} />
     </Routes>
   );
 }
