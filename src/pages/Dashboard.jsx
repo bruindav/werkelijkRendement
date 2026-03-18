@@ -1,5 +1,6 @@
+// Fix116 - Dashboard: sparen/beleggen split, toggle bank specificatie
 // Fix100 - getDoc Firebase vervangen door getInstellingen localDb
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken, getDashboardData } from '../hooks/useLocalDB';
@@ -112,6 +113,10 @@ export default function Dashboard() {
       let totaalVermogenDec31 = 0;
       let totaalSparenJan1 = 0;
       let totaalBeleggenJan1 = 0;
+      let totaalSparenDec31 = 0;
+      let totaalBeleggenDec31 = 0;
+      let totaalRendementSparen = 0;
+      let totaalRendementBeleggen = 0;
       let aantalPosities = 0;
       const bankDetails = [];
 
@@ -132,6 +137,8 @@ export default function Dashboard() {
               rekRendement += r.totaalRendement;
               aantalPosities++;
               totaalBeleggenJan1 += r.waardeJan1;
+              totaalBeleggenDec31 += r.waardeDec31;
+              totaalRendementBeleggen += r.totaalRendement;
             }
           } else {
             if (rek.jan1_saldo || rek.dec31_saldo || rek.ontvangen_rente) {
@@ -140,6 +147,8 @@ export default function Dashboard() {
               rekRendement = (rek.ontvangen_rente || 0) - (rek.kosten || 0);
               aantalPosities++;
               totaalSparenJan1 += rekJan1;
+              totaalSparenDec31 += rekDec31;
+              totaalRendementSparen += rekRendement;
             }
           }
 
@@ -179,6 +188,8 @@ export default function Dashboard() {
       const vermogenSplit = { sparen: totaalSparenJan1, beleggen: totaalBeleggenJan1 };
       const vergelijk = vergelijkMethoden(totaalRendement, totaalVermogenJan1, selectedYear, instellingen, vermogenSplit);
       setTotalen({ totaalRendement, totaalVermogenJan1, totaalVermogenDec31, aantalPosities, vergelijk, vermogenSplit,
+        totaalSparenJan1, totaalSparenDec31, totaalBeleggenJan1, totaalBeleggenDec31,
+        totaalRendementSparen, totaalRendementBeleggen,
         bankDetails: bankDetails.sort((a, b) => a.volgorde - b.volgorde) });
       setLoadingTotalen(false);
     }
@@ -188,6 +199,7 @@ export default function Dashboard() {
   }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(','), instellingen]);
 
   const rendementPositief = totalen?.totaalRendement >= 0;
+  const [mobieleKolom, setMobieleKolom] = useState('rendement'); // 'jan1' | 'dec31' | 'rendement'
 
   return (
     <div>
@@ -212,32 +224,91 @@ export default function Dashboard() {
             rendementPositief={rendementPositief}
             selectedYear={selectedYear}
           />
-          {/* Desktop: 4 blokken (verborgen op mobiel) */}
-          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatCard
-            label="Vermogen 1 januari"
-            value={formatEuro(totalen.totaalVermogenJan1)}
-            color="blue"
-            icon={<Building2 className="w-6 h-6" />}
-          />
-          <StatCard
-            label="Vermogen 31 december"
-            value={formatEuro(totalen.totaalVermogenDec31)}
-            color="purple"
-          />
-          <StatCard
-            label="Werkelijk rendement"
-            value={formatEuro(totalen.totaalRendement)}
-            sub={totalen.totaalVermogenJan1 > 0 ? formatPct((totalen.totaalRendement / totalen.totaalVermogenJan1) * 100) : ''}
-            color={rendementPositief ? 'green' : 'red'}
-            icon={rendementPositief ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
-          />
-          <StatCard
-            label="Belasting (werkelijk)"
-            value={formatEuro(totalen.vergelijk.werkelijk.belasting)}
-            sub={`vs forfaitair: ${formatEuro(totalen.vergelijk.forfaitair.belasting)}`}
-            color="red"
-          />
+          {/* Desktop: blokken (verborgen op mobiel) */}
+          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {/* Vermogen blok */}
+            <div className="bg-gradient-to-br from-blue-600/20 to-blue-600/5 border border-blue-600/30 rounded-2xl p-5">
+              <p className="text-sm text-slate-400 mb-3 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-blue-400" /> Vermogen
+              </p>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Sparen 1 jan</span>
+                  <span className="text-slate-300">{formatEuro(totalen.totaalSparenJan1)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Beleggen 1 jan</span>
+                  <span className="text-slate-300">{formatEuro(totalen.totaalBeleggenJan1)}</span>
+                </div>
+                <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1.5">
+                  <span className="text-slate-400 font-medium">Totaal 1 jan</span>
+                  <span className="text-white font-bold">{formatEuro(totalen.totaalVermogenJan1)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400 font-medium">Totaal 31 dec</span>
+                  <span className="text-white font-bold">{formatEuro(totalen.totaalVermogenDec31)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Werkelijk rendement blok */}
+            <div className={`bg-gradient-to-br ${rendementPositief ? 'from-emerald-600/20 to-emerald-600/5 border-emerald-600/30' : 'from-red-600/20 to-red-600/5 border-red-600/30'} border rounded-2xl p-5`}>
+              <p className="text-sm text-slate-400 mb-3 flex items-center gap-2">
+                {rendementPositief ? <TrendingUp className="w-4 h-4 text-emerald-400" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
+                Werkelijk rendement
+              </p>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">🏦 Sparen</span>
+                  <span className={totalen.totaalRendementSparen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                    {totalen.totaalRendementSparen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementSparen)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">📈 Beleggen</span>
+                  <span className={totalen.totaalRendementBeleggen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                    {totalen.totaalRendementBeleggen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementBeleggen)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1.5">
+                  <span className="text-slate-400 font-medium">Totaal</span>
+                  <span className={`font-bold ${rendementPositief ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {rendementPositief ? '+' : ''}{formatEuro(totalen.totaalRendement)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Rendement %</span>
+                  <span className="text-slate-400">
+                    {totalen.totaalVermogenJan1 > 0 ? formatPct((totalen.totaalRendement / totalen.totaalVermogenJan1) * 100) : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Belasting blok */}
+            <div className="bg-gradient-to-br from-red-600/20 to-red-600/5 border border-red-600/30 rounded-2xl p-5">
+              <p className="text-sm text-slate-400 mb-3">Belasting</p>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Werkelijk</span>
+                  <span className="text-red-400 font-medium">{formatEuro(totalen.vergelijk.werkelijk.belasting)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Forfaitair</span>
+                  <span className="text-slate-300">{formatEuro(totalen.vergelijk.forfaitair.belasting)}</span>
+                </div>
+                <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1.5">
+                  <span className="text-slate-400 font-medium">Voordeligst</span>
+                  <span className={`font-bold text-xs ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? '✓ Werkelijk' : '✓ Forfaitair'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Voordeel</span>
+                  <span className="text-emerald-400">-{formatEuro(totalen.vergelijk.voordeel)}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </>
       ) : (
@@ -295,29 +366,84 @@ export default function Dashboard() {
 
           {/* Desktop: 3 blokken */}
           <div className="hidden sm:grid sm:grid-cols-3 gap-6">
+            {/* Forfaitair kolom */}
             <div className="bg-slate-900/50 rounded-xl p-4">
-              <p className="text-sm text-slate-400 mb-1">Forfaitair rendement ({formatPct(totalen.vergelijk.forfaitair.forfaitairPercentage)})</p>
-              <p className="text-xl font-bold text-white">{formatEuro(totalen.vergelijk.forfaitair.forfaitairRendement)}</p>
-              <p className="text-sm text-slate-500 mt-1">Belasting: {formatEuro(totalen.vergelijk.forfaitair.belasting)}</p>
-              {totalen.vergelijk.forfaitair.splitsing && (
-                <div className="mt-2 space-y-0.5 text-xs text-slate-600">
-                  <p>Sparen: {formatPct(totalen.vergelijk.forfaitair.splitsing.sparen.pct)} × {formatEuro(totalen.vergelijk.forfaitair.splitsing.sparen.belastbaar)}</p>
-                  <p>Beleggen: {formatPct(totalen.vergelijk.forfaitair.splitsing.beleggen.pct)} × {formatEuro(totalen.vergelijk.forfaitair.splitsing.beleggen.belastbaar)}</p>
-                  <p className="text-slate-500">Heffingsvrij: {formatEuro(totalen.vergelijk.forfaitair.heffingsvrij)}</p>
+              <p className="text-sm text-slate-400 mb-3">Forfaitair rendement</p>
+              {totalen.vergelijk.forfaitair.splitsing ? (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">🏦 Sparen ({formatPct(totalen.vergelijk.forfaitair.splitsing.sparen.pct)})</span>
+                    <span className="text-slate-300">{formatEuro(totalen.vergelijk.forfaitair.splitsing.sparen.rendement)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">📈 Beleggen ({formatPct(totalen.vergelijk.forfaitair.splitsing.beleggen.pct)})</span>
+                    <span className="text-slate-300">{formatEuro(totalen.vergelijk.forfaitair.splitsing.beleggen.rendement)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1">
+                    <span className="text-slate-400 font-medium">Totaal rendement</span>
+                    <span className="text-white font-bold">{formatEuro(totalen.vergelijk.forfaitair.forfaitairRendement)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Belasting</span>
+                    <span className="text-red-400">{formatEuro(totalen.vergelijk.forfaitair.belasting)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-600">
+                    <span>Heffingsvrij</span>
+                    <span>{formatEuro(totalen.vergelijk.forfaitair.heffingsvrij)}</span>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <p className="text-xl font-bold text-white">{formatEuro(totalen.vergelijk.forfaitair.forfaitairRendement)}</p>
+                  <p className="text-sm text-slate-500 mt-1">Belasting: {formatEuro(totalen.vergelijk.forfaitair.belasting)}</p>
+                </>
               )}
             </div>
+            {/* Werkelijk kolom */}
             <div className="bg-slate-900/50 rounded-xl p-4">
-              <p className="text-sm text-slate-400 mb-1">Werkelijk rendement</p>
-              <p className="text-xl font-bold text-white">{formatEuro(totalen.totaalRendement)}</p>
-              <p className="text-sm text-slate-500 mt-1">Belasting: {formatEuro(totalen.vergelijk.werkelijk.belasting)}</p>
+              <p className="text-sm text-slate-400 mb-3">Werkelijk rendement</p>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">🏦 Sparen</span>
+                  <span className={totalen.totaalRendementSparen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                    {totalen.totaalRendementSparen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementSparen)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">📈 Beleggen</span>
+                  <span className={totalen.totaalRendementBeleggen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                    {totalen.totaalRendementBeleggen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementBeleggen)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1">
+                  <span className="text-slate-400 font-medium">Totaal rendement</span>
+                  <span className={`font-bold ${rendementPositief ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {rendementPositief ? '+' : ''}{formatEuro(totalen.totaalRendement)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Belasting</span>
+                  <span className="text-red-400">{formatEuro(totalen.vergelijk.werkelijk.belasting)}</span>
+                </div>
+              </div>
             </div>
+            {/* Voordeel kolom */}
             <div className={`rounded-xl p-4 ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'bg-emerald-900/30 border border-emerald-600/30' : 'bg-orange-900/30 border border-orange-600/30'}`}>
-              <p className="text-sm text-slate-400 mb-1">Voordeligste methode</p>
+              <p className="text-sm text-slate-400 mb-3">Voordeligste methode</p>
               <p className={`text-xl font-bold ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'text-emerald-400' : 'text-orange-400'}`}>
-                {totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'Werkelijk rendement ✓' : 'Forfaitair rendement ✓'}
+                {totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'Werkelijk ✓' : 'Forfaitair ✓'}
               </p>
-              <p className="text-sm text-slate-400 mt-1">Voordeel: {formatEuro(totalen.vergelijk.voordeel)}</p>
+              <p className="text-sm text-slate-500 mt-2">Voordeel: {formatEuro(totalen.vergelijk.voordeel)}</p>
+              <div className="mt-3 pt-3 border-t border-slate-700/30 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Forfaitaire belasting</span>
+                  <span className="text-slate-400">{formatEuro(totalen.vergelijk.forfaitair.belasting)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500">Werkelijke belasting</span>
+                  <span className="text-slate-400">{formatEuro(totalen.vergelijk.werkelijk.belasting)}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -340,7 +466,23 @@ export default function Dashboard() {
           </div>
         ) : totalen?.bankDetails?.length > 0 ? (
           <div>
-            {/* Kolomheaders */}
+            {/* Mobiele kolom toggle */}
+            <div className="flex sm:hidden gap-1 px-4 py-2 border-b border-slate-800 bg-slate-900/30">
+              {[
+                { key: 'jan1', label: '1 jan' },
+                { key: 'dec31', label: '31 dec' },
+                { key: 'rendement', label: 'Rendement' },
+              ].map(({ key, label }) => (
+                <button key={key} onClick={() => setMobieleKolom(key)}
+                  className={`flex-1 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    mobieleKolom === key ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Desktop kolomheaders */}
             <div className="hidden sm:grid grid-cols-[1fr_120px_120px_100px_32px] gap-2 px-5 py-2 text-xs text-slate-500 border-b border-slate-800">
               <span>Rekening</span>
               <span className="text-right">1 januari</span>
@@ -358,6 +500,12 @@ export default function Dashboard() {
                     <Building2 className="w-3.5 h-3.5 text-blue-400" />
                   </div>
                   <span className="font-semibold text-white flex-1 text-sm">{bank.naam}</span>
+                  {/* Mobiel: toon geselecteerde kolom */}
+                  <div className="sm:hidden text-sm font-medium">
+                    {mobieleKolom === 'jan1' && <span className="text-slate-300">{formatEuro(bank.jan1)}</span>}
+                    {mobieleKolom === 'dec31' && <span className="text-slate-300">{formatEuro(bank.dec31)}</span>}
+                    {mobieleKolom === 'rendement' && <span className={bank.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{bank.rendement >= 0 ? '+' : ''}{formatEuro(bank.rendement)}</span>}
+                  </div>
                   <div className="hidden sm:flex items-center gap-6 text-sm">
                     <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.jan1)}</span>
                     <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.dec31)}</span>
@@ -381,6 +529,12 @@ export default function Dashboard() {
                     >
                       <span className="text-base flex-shrink-0">{typeEmoji}</span>
                       <span className="text-sm text-slate-400 flex-1 truncate">{rek.naam}</span>
+                      {/* Mobiel */}
+                      <div className="sm:hidden text-xs">
+                        {mobieleKolom === 'jan1' && <span className="text-slate-500">{formatEuro(rek.jan1)}</span>}
+                        {mobieleKolom === 'dec31' && <span className="text-slate-500">{formatEuro(rek.dec31)}</span>}
+                        {mobieleKolom === 'rendement' && <span className={rek.rendement >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'}>{rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}</span>}
+                      </div>
                       <div className="hidden sm:flex items-center gap-6 text-xs">
                         <span className="w-[120px] text-right text-slate-500">{formatEuro(rek.jan1)}</span>
                         <span className="w-[120px] text-right text-slate-500">{formatEuro(rek.dec31)}</span>
@@ -399,6 +553,12 @@ export default function Dashboard() {
             {totalen && (
               <div className="flex items-center gap-3 px-5 py-3 bg-slate-900/50 border-t border-slate-700">
                 <span className="text-sm font-semibold text-slate-300 flex-1">Totaal</span>
+                {/* Mobiel */}
+                <div className="sm:hidden text-sm font-bold">
+                  {mobieleKolom === 'jan1' && <span className="text-white">{formatEuro(totalen.totaalVermogenJan1)}</span>}
+                  {mobieleKolom === 'dec31' && <span className="text-white">{formatEuro(totalen.totaalVermogenDec31)}</span>}
+                  {mobieleKolom === 'rendement' && <span className={totalen.totaalRendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{totalen.totaalRendement >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendement)}</span>}
+                </div>
                 <div className="hidden sm:flex items-center gap-6 text-sm">
                   <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenJan1)}</span>
                   <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenDec31)}</span>
