@@ -1,4 +1,4 @@
-// Versie: Fix116/118/119/120/121/122
+// Versie: Fix116/118/119/120/121/122/123
 // Fix116 - Dashboard: sparen/beleggen split, toggle bank specificatie
 // Fix100 - getDoc Firebase vervangen door getInstellingen localDb
 import { useState, useEffect, useRef } from 'react';
@@ -66,27 +66,50 @@ function MobieleSamenvatting({ totalen, rendementPositief, selectedYear }) {
 
       <div className="border-t border-slate-700" />
 
-      {/* Rendement — sparen + beleggen split */}
+      {/* Rendement — werkelijk vs forfaitair tabel */}
       <div>
-        <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Werkelijk rendement</p>
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">🏦 Sparen</span>
-            <span className={totalen.totaalRendementSparen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-              {totalen.totaalRendementSparen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementSparen)}
-            </span>
+        <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Rendement</p>
+        <div className="grid grid-cols-[auto_1fr_1fr] text-xs gap-y-1">
+          <div />
+          <div className="text-right text-slate-500 pb-1">Werkelijk</div>
+          <div className="text-right text-slate-500 pb-1">Forfaitair</div>
+          {/* Sparen */}
+          <div className="text-slate-400 pr-2">🏦 Sparen</div>
+          <div className={`text-right ${totalen.totaalRendementSparen >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {totalen.totaalRendementSparen >= 0 ? '+' : ''}{formatEuroGeheel(totalen.totaalRendementSparen)}
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">📈 Beleggen</span>
-            <span className={totalen.totaalRendementBeleggen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-              {totalen.totaalRendementBeleggen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementBeleggen)}
-            </span>
+          <div className="text-right text-slate-400">
+            {totalen.vergelijk.forfaitair.splitsing
+              ? formatEuroGeheel(totalen.vergelijk.forfaitair.splitsing.sparen.rendement)
+              : '—'}
           </div>
-          <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-0.5">
-            <span className="text-slate-400 font-medium">Totaal</span>
-            <span className={`font-bold ${rendementPositief ? 'text-emerald-400' : 'text-red-400'}`}>
-              {rendementPositief ? '+' : ''}{formatEuro(totalen.totaalRendement)} ({formatPct(pct)})
-            </span>
+          {/* Beleggen */}
+          <div className="text-slate-400 pr-2 mt-0.5">📈 Beleggen</div>
+          <div className={`text-right mt-0.5 ${totalen.totaalRendementBeleggen >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {totalen.totaalRendementBeleggen >= 0 ? '+' : ''}{formatEuroGeheel(totalen.totaalRendementBeleggen)}
+          </div>
+          <div className="text-right text-slate-400 mt-0.5">
+            {totalen.vergelijk.forfaitair.splitsing
+              ? formatEuroGeheel(totalen.vergelijk.forfaitair.splitsing.beleggen.rendement)
+              : '—'}
+          </div>
+          {/* Scheidingslijn */}
+          <div className="col-span-3 border-t border-slate-700/50 my-1" />
+          {/* Totaal */}
+          <div className="text-slate-400 font-medium pr-2">Totaal</div>
+          <div className={`text-right font-bold ${rendementPositief ? 'text-emerald-400' : 'text-red-400'}`}>
+            {rendementPositief ? '+' : ''}{formatEuroGeheel(totalen.totaalRendement)}
+          </div>
+          <div className="text-right text-slate-400 font-medium">
+            {formatEuroGeheel(totalen.vergelijk.forfaitair.forfaitairRendement)}
+          </div>
+          {/* % rij */}
+          <div className="text-slate-500 pr-2 mt-0.5">%</div>
+          <div className="text-right text-slate-500 mt-0.5">
+            {totalen.totaalVermogenJan1 > 0 ? formatPct((totalen.totaalRendement / totalen.totaalVermogenJan1) * 100) : '—'}
+          </div>
+          <div className="text-right text-slate-500 mt-0.5">
+            {formatPct(totalen.vergelijk.forfaitair.forfaitairPercentage)}
           </div>
         </div>
       </div>
@@ -280,36 +303,48 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Werkelijk rendement blok */}
+            {/* Rendement blok — werkelijk vs forfaitair */}
             <div className={`bg-gradient-to-br ${rendementPositief ? 'from-emerald-600/20 to-emerald-600/5 border-emerald-600/30' : 'from-red-600/20 to-red-600/5 border-red-600/30'} border rounded-2xl p-5`}>
               <p className="text-sm text-slate-400 mb-3 flex items-center gap-2">
                 {rendementPositief ? <TrendingUp className="w-4 h-4 text-emerald-400" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
-                Werkelijk rendement
+                Rendement
               </p>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">🏦 Sparen</span>
-                  <span className={totalen.totaalRendementSparen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                    {totalen.totaalRendementSparen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementSparen)}
-                  </span>
+              <div className="grid grid-cols-[auto_1fr_1fr] text-xs gap-y-1.5">
+                <div />
+                <div className="text-right text-slate-500 pb-1">Werkelijk</div>
+                <div className="text-right text-slate-500 pb-1">Forfaitair</div>
+                <div className="text-slate-400 pr-3">🏦 Sparen</div>
+                <div className={`text-right ${totalen.totaalRendementSparen >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {totalen.totaalRendementSparen >= 0 ? '+' : ''}{formatEuroGeheel(totalen.totaalRendementSparen)}
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">📈 Beleggen</span>
-                  <span className={totalen.totaalRendementBeleggen >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                    {totalen.totaalRendementBeleggen >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendementBeleggen)}
-                  </span>
+                <div className="text-right text-slate-400">
+                  {totalen.vergelijk.forfaitair.splitsing
+                    ? formatEuroGeheel(totalen.vergelijk.forfaitair.splitsing.sparen.rendement)
+                    : '—'}
                 </div>
-                <div className="flex justify-between text-xs border-t border-slate-700/50 pt-1.5 mt-1.5">
-                  <span className="text-slate-400 font-medium">Totaal</span>
-                  <span className={`font-bold ${rendementPositief ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {rendementPositief ? '+' : ''}{formatEuro(totalen.totaalRendement)}
-                  </span>
+                <div className="text-slate-400 pr-3">📈 Beleggen</div>
+                <div className={`text-right ${totalen.totaalRendementBeleggen >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {totalen.totaalRendementBeleggen >= 0 ? '+' : ''}{formatEuroGeheel(totalen.totaalRendementBeleggen)}
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Rendement %</span>
-                  <span className="text-slate-400">
-                    {totalen.totaalVermogenJan1 > 0 ? formatPct((totalen.totaalRendement / totalen.totaalVermogenJan1) * 100) : '—'}
-                  </span>
+                <div className="text-right text-slate-400">
+                  {totalen.vergelijk.forfaitair.splitsing
+                    ? formatEuroGeheel(totalen.vergelijk.forfaitair.splitsing.beleggen.rendement)
+                    : '—'}
+                </div>
+                <div className="col-span-3 border-t border-slate-700/50 my-0.5" />
+                <div className="text-slate-400 font-medium pr-3">Totaal</div>
+                <div className={`text-right font-bold ${rendementPositief ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {rendementPositief ? '+' : ''}{formatEuroGeheel(totalen.totaalRendement)}
+                </div>
+                <div className="text-right text-slate-400 font-medium">
+                  {formatEuroGeheel(totalen.vergelijk.forfaitair.forfaitairRendement)}
+                </div>
+                <div className="text-slate-500 pr-3">%</div>
+                <div className="text-right text-slate-500">
+                  {totalen.totaalVermogenJan1 > 0 ? formatPct((totalen.totaalRendement / totalen.totaalVermogenJan1) * 100) : '—'}
+                </div>
+                <div className="text-right text-slate-500">
+                  {formatPct(totalen.vergelijk.forfaitair.forfaitairPercentage)}
                 </div>
               </div>
             </div>
