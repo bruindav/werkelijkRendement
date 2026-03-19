@@ -1,4 +1,4 @@
-// Versie: Fix116/118/119/120/121/122/123
+// Versie: Fix116/118/119/120/121/122/123/124
 // Fix116 - Dashboard: sparen/beleggen split, toggle bank specificatie
 // Fix100 - getDoc Firebase vervangen door getInstellingen localDb
 import { useState, useEffect, useRef } from 'react';
@@ -114,20 +114,7 @@ function MobieleSamenvatting({ totalen, rendementPositief, selectedYear }) {
         </div>
       </div>
 
-      <div className="border-t border-slate-700" />
 
-      {/* Belasting */}
-      <div className="flex justify-between items-center">
-        <div className="space-y-1">
-          <div className="flex gap-4 text-xs">
-            <span className="text-slate-500">Werkelijk: <span className="text-red-400 font-medium">{formatEuro(totalen.vergelijk.werkelijk.belasting)}</span></span>
-            <span className="text-slate-500">Forfaitair: <span className="text-slate-300">{formatEuro(totalen.vergelijk.forfaitair.belasting)}</span></span>
-          </div>
-        </div>
-        <span className={`text-xs font-bold ml-3 ${totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? 'text-emerald-400' : 'text-amber-400'}`}>
-          {totalen.vergelijk.voordeliigsteMethode === 'werkelijk' ? '✓ Werkelijk' : '✓ Forfaitair'}
-        </span>
-      </div>
 
     </div>
   );
