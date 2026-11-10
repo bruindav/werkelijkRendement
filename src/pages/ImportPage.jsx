@@ -1,4 +1,4 @@
-// Versie: Fix130
+// Versie: Fix131
 // Fix102 - Multi-file import — meerdere PDF bestanden tegelijk
 // Fix104 - Mobiele import fix: files direct opslaan voor async (Android Chrome fix)
 // Fix105 - Gratis limiet: max 1 PDF
@@ -264,7 +264,8 @@ export default function ImportPage() {
     setImportStatus('bezig');
     let totaal = 0;
     const dubbel = [];
-    const tel = (r) => { totaal += r.toegevoegd.length; dubbel.push(...r.overgeslagen); return r; };
+    const bijgewerkt = [];
+    const tel = (r) => { totaal += r.toegevoegd.length; dubbel.push(...r.overgeslagen); bijgewerkt.push(...(r.bijgewerkt || [])); return r; };
 
     for (const item of bestanden) {
       if (item.status !== 'herkend' || !item.resultaat) continue;
@@ -302,7 +303,7 @@ export default function ImportPage() {
       }
     }
 
-    setImportResultaat({ totaal, dubbel });
+    setImportResultaat({ totaal, dubbel, bijgewerkt });
     setImportStatus('klaar');
   };
 
@@ -404,6 +405,11 @@ export default function ImportPage() {
             <p className="text-sm text-emerald-300/80 mb-4">
               {importResultaat.totaal} rekening(en) geïmporteerd.
             </p>
+            {importResultaat.bijgewerkt?.length > 0 && (
+              <p className="text-sm text-emerald-300/80 mb-4">
+                ✓ Dividend/rente aangevuld bij bestaande rekening(en): {importResultaat.bijgewerkt.join(', ')}.
+              </p>
+            )}
             {importResultaat.dubbel?.length > 0 && (
               <p className="text-sm text-amber-300 mb-4">
                 ⚠️ {importResultaat.dubbel.length} rekening(en) overgeslagen omdat ze dit jaar al bestaan: {importResultaat.dubbel.join(', ')}.

@@ -1,3 +1,4 @@
+// Versie: Fix131
 // PDF Parser - volledig client-side met pdf.js
 // Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO, Evi (Van Lanschot)
 // Fix101 - ABN AMRO parser herschreven voor nieuw PDF-formaat 2025
@@ -223,7 +224,12 @@ function parseEviTekst(text) {
   // Split in secties
   const janMatch = text.match(/Vermogen per 01-01-\d{4}([\s\S]+?)Vermogen per 31-12-/);
   const decMatch = text.match(/Vermogen per 31-12-\d{4}([\s\S]+?)(?:Ontvangen rente|$)/);
-  const divMatch = text.match(/Dividend binnenland([\s\S]+?)Dividend buitenland/);
+  const divBinnen = text.match(/Dividend binnenland([\s\S]+?)Dividend buitenland/);
+  const divBuiten = text.match(/Dividend buitenland([\s\S]+?)(?:Het spaartegoed|De jaaropgave|$)/);
+  const divBlokken = [divBinnen?.[1], divBuiten?.[1]].filter(Boolean);
+  // Bruto dividend totalen (binnen + buiten) — vangt ook dividend op dat niet aan een fonds te koppelen is
+  const totaalBruto = (blok) => parseBedrag(blok?.match(/Totaal\s+€\s*([\d.,]+)/)?.[1] || '0');
+  const dividendTotaal = totaalBruto(divBinnen?.[1]) + totaalBruto(divBuiten?.[1]);
 
   const parseSecieFondsen = (blok, target) => {
     if (!blok) return;
@@ -247,18 +253,23 @@ function parseEviTekst(text) {
   parseSecieFondsen(decMatch?.[1], fondsenDec);
 
   // Dividenden: "FondsNaam €17,36 €2,60 €14,76" (naam kan spaties bevatten)
-  if (divMatch) {
-    for (const line of divMatch[1].split('\n')) {
+  for (const blok of divBlokken) {
+    for (const line of blok.split('\n')) {
       const m = line.match(/^([A-Z][A-Za-z0-9 \-]+?)\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)\s+€\s*([\d.,]+)/);
       if (m) {
         const naam = m[1].trim();
         if (naam !== 'Totaal' && naam !== 'Bruto dividend') {
           const leesbaar = naam.includes(' ') ? naam : maakLeesbaar(naam);
-          dividendenBruto[leesbaar] = parseBedrag(m[2]);
+          dividendenBruto[leesbaar] = (dividendenBruto[leesbaar] || 0) + parseBedrag(m[2]);
         }
       }
     }
   }
+
+  // Spaartegoed (cash op de Evi-rekening) en ontvangen rente op sparen
+  const spaarJan = parseBedrag(janMatch?.[1]?.match(/Spaartegoed\s+€\s*([\d.,]+)/)?.[1] || '0');
+  const spaarDec = parseBedrag(text.match(/Vermogen per 31-12-\d{4}[\s\S]*?Spaartegoed\s+€\s*([\d.,]+)/)?.[1] || '0');
+  const renteSparen = parseBedrag(text.match(/Ontvangen rente dit jaar\s+Sparen\s+€\s*([\d.,]+)/)?.[1] || '0');
 
   // Bouw posities
   const alleNamen = new Set([...Object.keys(fondsenJan), ...Object.keys(fondsenDec)]);
@@ -286,17 +297,35 @@ function parseEviTekst(text) {
     });
   }
 
+  const rekeningen = [{
+    naam: `Beleggingsrekening (${rekeningnummer})`,
+    weergave_naam: 'Beleggingsrekening',
+    type: 'beleggen',
+    rekeningnummer,
+    dividend_totaal: dividendTotaal,
+    posities,
+  }];
+
+  // Spaartegoed + rente als aparte spaarrekening (hoort bij het vermogen in het jaaroverzicht)
+  if (spaarJan > 0 || spaarDec > 0 || renteSparen > 0) {
+    rekeningen.push({
+      naam: `Spaartegoed (${rekeningnummer})`,
+      weergave_naam: 'Spaartegoed',
+      type: 'sparen',
+      rekeningnummer,
+      jan1_saldo: spaarJan,
+      dec31_saldo: spaarDec,
+      ontvangen_rente: renteSparen,
+      rente_pct: 0, kosten: 0,
+      notitie: 'Evi spaartegoed',
+    });
+  }
+
   return {
     bank: 'Evi (Van Lanschot)',
     type: 'evi',
     jaar,
-    rekeningen: [{
-      naam: `Beleggingsrekening (${rekeningnummer})`,
-      weergave_naam: 'Beleggingsrekening',
-      type: 'beleggen',
-      rekeningnummer,
-      posities,
-    }]
+    rekeningen,
   };
 }
 
@@ -335,14 +364,25 @@ function parseDegiro(text) {
   const account = accountMatch ? accountMatch[1] : '';
 
   // Dividend totaal bruto
-  const divMatch = text.match(/Totaal\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/);
+  // Fix131: dividend en couponrente uit hun eigen sectie lezen (niet de eerste 'Totaal' in het document)
+  const divSectie = text.match(/Dividend in EUR([\s\S]*?)(?:Ontvangen couponrente|Overige rente|$)/)?.[1] || '';
+  const divMatch = divSectie.match(/Totaal\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/)
+    || text.match(/Totaal\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/);
   const divBruto = divMatch ? parseBedrag(divMatch[1]) : 0;
+
+  const couponSectie = text.match(/Ontvangen couponrente in EUR([\s\S]*?)(?:Overige rente|$)/)?.[1] || '';
+  const couponMatch = couponSectie.match(/Totaal\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/);
+  const couponBruto = couponMatch ? parseBedrag(couponMatch[1]) : 0;
+
+  // Rente op de Flatex geldrekening (betaald = kosten, ontvangen = rente)
+  const flatexBetaald = parseBedrag(text.match(/Totaal betaalde rente\s+(-?[\d.,]+)/)?.[1] || '0');
+  const flatexOntvangen = parseBedrag(text.match(/Totaal ontvangen rente\s+(-?[\d.,]+)/)?.[1] || '0');
 
   function parseBlok(label, eindLabel) {
     const pat = new RegExp(
       label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
       '([\\s\\S]+?)' +
-      (eindLabel ? eindLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : 'Totale portefeuillewaarde'),
+      (eindLabel ? eindLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : 'Totale portefeuille\\s?waarde'),
       ''
     );
     const blokMatch = text.match(pat);
@@ -361,7 +401,7 @@ function parseDegiro(text) {
       }
       // Positie met ISIN
       const posM = l.match(
-        /^(.+?)\s+([A-Z]{2}[A-Z0-9]{10})\s+(Aandeel|ETF|Obligatie|Fonds)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+(EUR|USD|GBP)\s+([\d.,]+)$/
+        /^(.+?)\s+([A-Z]{2}[A-Z0-9]{9,10})\s+(?:(Aandeel|ETF|Obligatie|Fonds)\s+)?(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+(EUR|USD|GBP)\s+([\d.,]+)$/
       );
       if (posM) {
         const [, naam, isin, ptype, aantalStr, koersLok, , valuta, waarde_eur] = posM;
@@ -370,7 +410,7 @@ function parseDegiro(text) {
         // EUR-equivalent koers: waarde_eur / aantal (zodat koers × aantal = waarde klopt)
         const koersEur = aantalNum > 0 ? waardeEur / aantalNum : 0;
         posities.push({
-          naam: naam.trim(), isin, type: ptype.toLowerCase(),
+          naam: naam.trim(), isin, type: (ptype || 'aandeel').toLowerCase(),
           aantal: aantalNum,
           koers: koersEur,              // EUR koers (voor correcte berekening)
           koers_lokaal: parseBedrag(koersLok), // originele USD/GBP koers
@@ -451,8 +491,8 @@ function parseDegiro(text) {
       rekeningnummer: flatexIban || account,
       jan1_saldo:  flatexJan1,
       dec31_saldo: flatexDec31,
-      ontvangen_rente: 0,
-      rente_pct: 0, kosten: 0,
+      ontvangen_rente: flatexOntvangen,
+      rente_pct: 0, kosten: flatexBetaald,
       notitie: 'DEGIRO kassaldo / flatexDEGIRO Geldrekening',
     });
   }
@@ -464,6 +504,7 @@ function parseDegiro(text) {
     type: 'beleggen',
     rekeningnummer: account,
     dividend_totaal: divBruto,
+    rente_totaal: couponBruto,
     posities: beleggingPosities,
   });
 
@@ -647,6 +688,16 @@ function parseMeewind(text) {
   }
 
   const divMatch = text.match(/Bruto dividenduitkering:\s+€\s*([\d.,]+)/);
+
+  // Fix131: dividend per fonds uit het blok 'Bruto dividenduitkering' (t/m Kapitaalvermindering/Ingehouden)
+  const uitkBlok = text.match(/Bruto dividenduitkering:[^\n]*\n([\s\S]*?)(?:Kapitaalvermindering|Ingehouden)/)?.[1] || '';
+  const normNaam = (n) => n.toLowerCase().replace(/^[-•\s]+/, '').replace(/\s+/g, ' ').trim();
+  for (const regel of uitkBlok.split('\n')) {
+    const m = regel.match(/^[-•\s]*(.+?)\s+€\s*([\d.,]+)$/);
+    if (!m) continue;
+    const doel = posities.find(p => normNaam(p.naam) === normNaam(m[1]));
+    if (doel) doel.dividend = parseBedrag(m[2]);
+  }
 
   return {
     bank: 'Meewind',

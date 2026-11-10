@@ -1,4 +1,4 @@
-// Versie: Fix130
+// Versie: Fix131
 // Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
@@ -266,6 +266,62 @@ export async function getAangifteData(year) {
 }
 
 // ============ IMPORT HELPERS ============
+// Fix131 - Dividend/rente uit jaaroverzichten: parsers leveren totalen (dividend_totaal,
+// rente_totaal) en soms dividend per positie. Het deel dat niet per positie bekend is
+// komt op een aparte regel zodat het totaal altijd klopt met het jaaroverzicht.
+const INKOMSTEN_POSITIE_NAAM = 'Ontvangen dividend & rente (totaal)';
+const r2 = (n) => Math.round((n || 0) * 100) / 100;
+
+function inkomstenRest(rek, posities) {
+  const somDiv = posities.reduce((t, p) => t + (p.dividend || 0), 0);
+  const somRente = posities.reduce((t, p) => t + (p.rente || 0), 0);
+  return {
+    dividend: r2((rek.dividend_totaal || 0) - somDiv),
+    rente: r2((rek.rente_totaal || 0) - somRente),
+  };
+}
+
+// Bestaande rekening (al eerder geïmporteerd) aanvullen met dividend/rente als daar nog niets staat
+async function vulInkomstenAan(bestaand, rek, normFn) {
+  if (bestaand.type === 'beleggen' && rek.type === 'beleggen') {
+    const pos = await db.posities.where('rekeningId').equals(bestaand.id).toArray();
+    const huidig = pos.reduce((t, p) => t + (p.dividend || 0) + (p.rente || 0), 0);
+    const nieuwTotaal = Math.max(
+      (rek.dividend_totaal || 0) + (rek.rente_totaal || 0),
+      (rek.posities || []).reduce((t, p) => t + (p.dividend || 0) + (p.rente || 0), 0));
+    if (huidig > 0.005 || nieuwTotaal <= 0.005) return false;
+
+    // 1. dividend per positie, waar de naam overeenkomt
+    for (const np of rek.posities || []) {
+      if (!np.dividend) continue;
+      const match = pos.find(p => normFn(p.naam) === normFn(np.naam));
+      if (match) {
+        match.dividend = np.dividend;
+        await db.posities.update(match.id, { dividend: np.dividend });
+      }
+    }
+    // 2. rest op aparte regel
+    const rest = inkomstenRest(rek, pos);
+    if (rest.dividend > 0.005 || rest.rente > 0.005) {
+      await db.posities.add({
+        id: genId(), rekeningId: bestaand.id, bankId: bestaand.bankId, year: bestaand.year,
+        naam: INKOMSTEN_POSITIE_NAAM, type: 'overig', isin: '', ticker: '',
+        jan1_waarde: 0, dec31_waarde: 0, jan1_aantal: 0, jan1_prijs: 0, dec31_aantal: 0, dec31_prijs: 0,
+        aankopen: [], verkopen: [],
+        dividend: Math.max(0, rest.dividend), rente: Math.max(0, rest.rente), kosten: 0, valuta: 'EUR',
+      });
+    }
+    return true;
+  }
+  // Spaar/deposito/rekening-courant: rente en kosten invullen als ze nog leeg zijn
+  const update = {};
+  if (!(bestaand.ontvangen_rente > 0) && rek.ontvangen_rente > 0) update.ontvangen_rente = rek.ontvangen_rente;
+  if (!(bestaand.kosten > 0) && rek.kosten > 0) update.kosten = rek.kosten;
+  if (Object.keys(update).length === 0) return false;
+  await db.rekeningen.update(bestaand.id, update);
+  return true;
+}
+
 // Voeg een bank + rekeningen toe vanuit de importeer-pagina
 export async function importeerBank(jaar, bankData, rekeningRows) {
   const norm = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -287,18 +343,22 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
   const bestaandeRek = await db.rekeningen.filter(r => r.bankId === bankId).toArray();
   const toegevoegd = [];
   const overgeslagen = [];
+  const bijgewerkt = [];
 
   for (const rek of rekeningRows) {
     const naam = rek.weergave_naam || rek.naam;
     const nr = normNr(rek.rekeningnummer || rek.iban);
 
-    // Dubbel = zelfde rekeningnummer, of (zonder nummer) zelfde type + naam
-    const isDubbel = bestaandeRek.some(r =>
-      nr && normNr(r.rekeningnummer)
-        ? normNr(r.rekeningnummer) === nr
-        : r.type === rek.type && norm(r.naam) === norm(naam));
-    if (isDubbel) {
-      overgeslagen.push(naam || 'rekening');
+    // Dubbel = zelfde type en zelfde rekeningnummer, of (zonder nummer) zelfde type + naam
+    const dubbele = bestaandeRek.find(r =>
+      r.type === rek.type && (
+        nr && normNr(r.rekeningnummer)
+          ? normNr(r.rekeningnummer) === nr
+          : norm(r.naam) === norm(naam)));
+    if (dubbele) {
+      // Eerder geïmporteerd zonder dividend/rente? Dan alsnog aanvullen.
+      if (await vulInkomstenAan(dubbele, rek, norm)) bijgewerkt.push(naam || 'rekening');
+      else overgeslagen.push(naam || 'rekening');
       continue;
     }
 
@@ -329,7 +389,7 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
 
     // Posities (beleggen)
     if (rek.type === 'beleggen') {
-      const positieLijst = rek.posities || [];
+      const positieLijst = [...(rek.posities || [])];
       if (positieLijst.length === 0 && (rek.jan1_waarde || rek.dec31_waarde)) {
         // Eén totaalpositie
         positieLijst.push({
@@ -345,6 +405,15 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
             ? [{ datum: `${jaar}-12-31`, aantal: 0, prijs: 0, totaal: rek.verkopen_totaal }] : [],
           dividend: rek.dividend_totaal || 0,
           rente: 0, kosten: 0,
+        });
+      }
+      // Dividend/rente dat niet per positie bekend is: aparte regel zodat het totaal klopt
+      const rest = inkomstenRest(rek, positieLijst);
+      if (rest.dividend > 0.005 || rest.rente > 0.005) {
+        positieLijst.push({
+          naam: INKOMSTEN_POSITIE_NAAM, type: 'overig',
+          jan1_waarde: 0, dec31_waarde: 0,
+          dividend: Math.max(0, rest.dividend), rente: Math.max(0, rest.rente),
         });
       }
       for (const pos of positieLijst) {
@@ -366,7 +435,7 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
           aankopen: pos.aankopen || [],
           verkopen: pos.verkopen || [],
           dividend: pos.dividend || 0,
-          rente: 0, kosten: 0,
+          rente: pos.rente || 0, kosten: pos.kosten || 0,
           // Valuta info (voor USD/GBP posities)
           valuta: pos.valuta || 'EUR',
           jan1_koers_lokaal: pos.jan1_koers_lokaal || 0,
@@ -377,7 +446,7 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
   }
   // Lege bank (alles dubbel en zelf aangemaakt) opruimen
   if (!bestaandeBank && toegevoegd.length === 0) await db.banken.delete(bankId);
-  return { bankId, toegevoegd, overgeslagen };
+  return { bankId, toegevoegd, overgeslagen, bijgewerkt };
 }
 
 // ============ STUBS VOOR BACKWARD COMPAT ============
