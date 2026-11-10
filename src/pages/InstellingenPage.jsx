@@ -1,9 +1,11 @@
+// Versie: Fix127
 // Instellingen — Box 3 tarieven, heffingsvrij vermogen, partner
 import { useState, useEffect } from 'react';
 import { getInstellingen, setInstellingen as saveInstellingen } from '../services/localDb';
 import { useApp } from '../context/AppContext';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
+import { APP_VERSIE } from '../version';
 import { Settings, Save, RotateCcw, Check, Users, User, Copy, ArrowRight, AlertTriangle, Loader, ChevronDown } from 'lucide-react';
 import { FORFAITAIR_TARIEVEN, HEFFINGSVRIJ_VERMOGEN } from '../services/berekening';
 import { kopieerJaar, controleerJaarLeeg } from '../hooks/useLocalDB';
@@ -471,6 +473,8 @@ export default function InstellingenPage() {
           </div>
         </div>
       )}
+
+      <p className="text-xs text-slate-600 text-center mt-10 mb-2">Werkelijk Rendement · versie {APP_VERSIE}</p>
     </div>
     </Layout>
   );

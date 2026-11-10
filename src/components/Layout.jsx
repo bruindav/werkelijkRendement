@@ -1,10 +1,11 @@
-// Versie: Fix126
+// Versie: Fix127
 // Fix126 - Demo-banner + 'Demo bekijken' in menu
 // Fix103b - Secundaire nav items (Help + Privacy) correct gerenderd in sidebar
 // Fix 10 - Jaar switchen navigeert mee
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { APP_VERSIE } from '../version';
 import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, HelpCircle, Lock, Scale, ChevronDown, Menu, X, Eye } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
@@ -134,6 +135,7 @@ export default function Layout({ children }) {
               </Link>
             );
           })}
+          <p className="text-[10px] text-slate-600 px-3 pt-2">versie {APP_VERSIE}</p>
         </div>
       </aside>
 
