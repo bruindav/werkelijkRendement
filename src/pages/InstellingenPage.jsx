@@ -1,4 +1,4 @@
-// Versie: Fix127
+// Versie: Fix128
 // Instellingen — Box 3 tarieven, heffingsvrij vermogen, partner
 import { useState, useEffect } from 'react';
 import { getInstellingen, setInstellingen as saveInstellingen } from '../services/localDb';
@@ -128,6 +128,7 @@ export default function InstellingenPage() {
     <Layout>
     <div className="max-w-2xl">
       <Breadcrumb items={[{ label: 'Instellingen' }]} />
+      <p className="inline-block text-xs bg-slate-800 text-slate-300 rounded-full px-3 py-1 mb-3">Versie {APP_VERSIE}</p>
 
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 bg-slate-700/60 border border-slate-600 rounded-xl flex items-center justify-center">
@@ -474,7 +475,7 @@ export default function InstellingenPage() {
         </div>
       )}
 
-      <p className="text-xs text-slate-600 text-center mt-10 mb-2">Werkelijk Rendement · versie {APP_VERSIE}</p>
+      <p className="text-xs text-slate-400 text-center mt-10 mb-2">Werkelijk Rendement · versie {APP_VERSIE}</p>
     </div>
     </Layout>
   );

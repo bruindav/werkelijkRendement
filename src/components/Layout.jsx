@@ -1,4 +1,4 @@
-// Versie: Fix127
+// Versie: Fix128
 // Fix126 - Demo-banner + 'Demo bekijken' in menu
 // Fix103b - Secundaire nav items (Help + Privacy) correct gerenderd in sidebar
 // Fix 10 - Jaar switchen navigeert mee
@@ -135,7 +135,7 @@ export default function Layout({ children }) {
               </Link>
             );
           })}
-          <p className="text-[10px] text-slate-600 px-3 pt-2">versie {APP_VERSIE}</p>
+          <p className="text-[11px] text-slate-400 px-3 pt-2">versie {APP_VERSIE}</p>
         </div>
       </aside>
 
@@ -189,6 +189,7 @@ export default function Layout({ children }) {
                 <Icon className="w-5 h-5" /> {label}
               </Link>
             ))}
+            <p className="text-xs text-slate-400 px-4 pt-2">Versie {APP_VERSIE}</p>
           </div>
         </div>
       )}
