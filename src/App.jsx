@@ -1,4 +1,4 @@
-// Versie: Fix126
+// Versie: Fix129
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import Layout from './components/Layout';
@@ -49,7 +49,7 @@ function AppRoutes() {
       <Route path="/jaar/:year/bank/:bankId" element={<AuthGuard><BankDetail /></AuthGuard>} />
       <Route path="/jaar/:year/bank/:bankId/rekening/:accountId" element={<AuthGuard><PositieLijst /></AuthGuard>} />
       <Route path="/jaar/:year/bank/:bankId/rekening/:accountId/sparen" element={<AuthGuard><SpaarpaginaLijst /></AuthGuard>} />
-      <Route path="/aangifte/:year" element={<AuthGuard><AangiftePage /></AuthGuard>} />
+      <Route path="/aangifte/:year" element={<AuthGuardNoLayout><AangiftePage /></AuthGuardNoLayout>} />
       <Route path="/importeren" element={<AuthGuardNoLayout><ImportPage /></AuthGuardNoLayout>} />
       <Route path="/instellingen" element={<AuthGuardNoLayout><InstellingenPage /></AuthGuardNoLayout>} />
       <Route path="/backup" element={<AuthGuardNoLayout><BackupPage /></AuthGuardNoLayout>} />
