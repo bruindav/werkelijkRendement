@@ -1,3 +1,4 @@
+// Versie: Fix130
 // Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
@@ -267,19 +268,48 @@ export async function getAangifteData(year) {
 // ============ IMPORT HELPERS ============
 // Voeg een bank + rekeningen toe vanuit de importeer-pagina
 export async function importeerBank(jaar, bankData, rekeningRows) {
-  const bankId = genId();
-  const count = await db.banken.where('year').equals(String(jaar)).count();
-  await db.banken.add({ id: bankId, year: String(jaar), volgorde: count, naam: bankData.naam, ...bankData });
+  const norm = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const normNr = (t) => String(t || '').replace(/\s+/g, '').toLowerCase();
+
+  // Fix130: bestaande bank (zelfde jaar + naam) hergebruiken i.p.v. dubbel aanmaken,
+  // zodat banken met een jaaroverzicht per rekening gewoon kunnen worden aangevuld.
+  const bankenInJaar = await db.banken.where('year').equals(String(jaar)).toArray();
+  const bestaandeBank = bankenInJaar.find(b => norm(b.naam) === norm(bankData.naam));
+
+  let bankId;
+  if (bestaandeBank) {
+    bankId = bestaandeBank.id;
+  } else {
+    bankId = genId();
+    await db.banken.add({ id: bankId, year: String(jaar), volgorde: bankenInJaar.length, naam: bankData.naam, ...bankData });
+  }
+
+  const bestaandeRek = await db.rekeningen.filter(r => r.bankId === bankId).toArray();
+  const toegevoegd = [];
+  const overgeslagen = [];
 
   for (const rek of rekeningRows) {
+    const naam = rek.weergave_naam || rek.naam;
+    const nr = normNr(rek.rekeningnummer || rek.iban);
+
+    // Dubbel = zelfde rekeningnummer, of (zonder nummer) zelfde type + naam
+    const isDubbel = bestaandeRek.some(r =>
+      nr && normNr(r.rekeningnummer)
+        ? normNr(r.rekeningnummer) === nr
+        : r.type === rek.type && norm(r.naam) === norm(naam));
+    if (isDubbel) {
+      overgeslagen.push(naam || 'rekening');
+      continue;
+    }
+
     const rekId = genId();
-    const rekCount = await db.rekeningen.filter(r => r.bankId === bankId).count();
-    await db.rekeningen.add({
+    const rekCount = bestaandeRek.length;
+    const nieuweRek = {
       id: rekId,
       bankId,
       year: String(jaar),
       volgorde: rekCount,
-      naam: rek.weergave_naam || rek.naam,
+      naam,
       type: rek.type,
       rekeningnummer: rek.rekeningnummer || rek.iban || '',
       kenmerk: rek.kenmerk || '',
@@ -292,7 +322,10 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
       notitie: rek.notitie || '',
       ...(rek.looptijd_maanden ? { looptijd_maanden: rek.looptijd_maanden } : {}),
       ...(rek.land ? { land: rek.land } : {}),
-    });
+    };
+    await db.rekeningen.add(nieuweRek);
+    bestaandeRek.push(nieuweRek);
+    toegevoegd.push(naam || 'rekening');
 
     // Posities (beleggen)
     if (rek.type === 'beleggen') {
@@ -342,7 +375,9 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
       }
     }
   }
-  return bankId;
+  // Lege bank (alles dubbel en zelf aangemaakt) opruimen
+  if (!bestaandeBank && toegevoegd.length === 0) await db.banken.delete(bankId);
+  return { bankId, toegevoegd, overgeslagen };
 }
 
 // ============ STUBS VOOR BACKWARD COMPAT ============

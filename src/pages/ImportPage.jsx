@@ -1,3 +1,4 @@
+// Versie: Fix130
 // Fix102 - Multi-file import — meerdere PDF bestanden tegelijk
 // Fix104 - Mobiele import fix: files direct opslaan voor async (Android Chrome fix)
 // Fix105 - Gratis limiet: max 1 PDF
@@ -262,6 +263,8 @@ export default function ImportPage() {
   const doImport = async () => {
     setImportStatus('bezig');
     let totaal = 0;
+    const dubbel = [];
+    const tel = (r) => { totaal += r.toegevoegd.length; dubbel.push(...r.overgeslagen); return r; };
 
     for (const item of bestanden) {
       if (item.status !== 'herkend' || !item.resultaat) continue;
@@ -271,8 +274,7 @@ export default function ImportPage() {
         if (resultaat.meerdere_jaren) {
           const geselecteerdeJaren = resultaat.jaren.filter((_, i) => geselecteerd[i]);
           for (const { jaar, rekening } of geselecteerdeJaren) {
-            await importeerBank(jaar, { naam: resultaat.bank }, [rekening]);
-            totaal++;
+            tel(await importeerBank(jaar, { naam: resultaat.bank }, [rekening]));
           }
         } else if (resultaat.type === 'raisin') {
           const groepen = {};
@@ -283,14 +285,12 @@ export default function ImportPage() {
             groepen[bankNaam].push(rec);
           });
           for (const [bankNaam, recs] of Object.entries(groepen)) {
-            await importeerBank(importJaar, { naam: `Raisin – ${bankNaam}` }, recs);
-            totaal += recs.length;
+            tel(await importeerBank(importJaar, { naam: `Raisin – ${bankNaam}` }, recs));
           }
         } else {
           const geselRekeningen = resultaat.rekeningen.filter((_, i) => geselecteerd[i]);
           if (geselRekeningen.length > 0) {
-            await importeerBank(importJaar, { naam: resultaat.bank }, geselRekeningen);
-            totaal += geselRekeningen.length;
+            tel(await importeerBank(importJaar, { naam: resultaat.bank }, geselRekeningen));
           }
         }
 
@@ -302,7 +302,7 @@ export default function ImportPage() {
       }
     }
 
-    setImportResultaat({ totaal });
+    setImportResultaat({ totaal, dubbel });
     setImportStatus('klaar');
   };
 
@@ -404,6 +404,11 @@ export default function ImportPage() {
             <p className="text-sm text-emerald-300/80 mb-4">
               {importResultaat.totaal} rekening(en) geïmporteerd.
             </p>
+            {importResultaat.dubbel?.length > 0 && (
+              <p className="text-sm text-amber-300 mb-4">
+                ⚠️ {importResultaat.dubbel.length} rekening(en) overgeslagen omdat ze dit jaar al bestaan: {importResultaat.dubbel.join(', ')}.
+              </p>
+            )}
             <div className="flex gap-3">
               <button onClick={() => navigate('/dashboard')}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2 text-sm font-medium">
