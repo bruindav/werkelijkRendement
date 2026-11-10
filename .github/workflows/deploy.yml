@@ -44,10 +44,13 @@ jobs:
           channelId: live
           projectId: werkelijkrendement
 
+      # Functions-deploy met het service account (FIREBASE_TOKEN is verlopen/deprecated).
+      # continue-on-error: een mislukte functions-deploy laat de hosting-deploy niet 'falen'.
       - name: Deploy Functions
+        continue-on-error: true
         run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           npm install -g firebase-tools
           firebase deploy --only functions --project werkelijkrendement --force
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          rm -f "$RUNNER_TEMP/sa.json"
