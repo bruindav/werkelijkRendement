@@ -1,15 +1,16 @@
-// Versie: Fix117
+// Versie: Fix126
+// Fix126 - Demo-banner + 'Demo bekijken' in menu
 // Fix103b - Secundaire nav items (Help + Privacy) correct gerenderd in sidebar
 // Fix 10 - Jaar switchen navigeert mee
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, HelpCircle, Lock, Scale, ChevronDown, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Building2, FileText, Upload, Settings, Shield, HelpCircle, Lock, Scale, ChevronDown, Menu, X, Eye } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
 
 export default function Layout({ children }) {
-  const { user, logout, selectedYear, setSelectedYear, isEditing } = useApp();
+  const { user, logout, selectedYear, setSelectedYear, isEditing, demo, kiesModus, sluitDemoAf, resetDemo } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -115,6 +116,12 @@ export default function Layout({ children }) {
 
         {/* Secundaire nav — Help en Privacy */}
         <div className="px-4 pb-2 border-t border-slate-800 pt-3">
+          {!demo && (
+            <button onClick={() => { if (confirm('Demo openen met voorbeeldgegevens? Je eigen gegevens blijven bewaard en onaangeraakt.')) kiesModus('demo'); }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 transition-colors">
+              <Eye className="w-4 h-4 flex-shrink-0" /> Demo bekijken
+            </button>
+          )}
           {navItemsSecundair.map(({ to, icon: Icon, label }) => {
             const active = location.pathname === to;
             return (
@@ -168,6 +175,12 @@ export default function Layout({ children }) {
           </nav>
           {/* Secundaire nav mobiel */}
           <div className="p-4 border-t border-slate-800 space-y-1">
+            {!demo && (
+              <button onClick={() => { setMobileOpen(false); if (confirm('Demo openen met voorbeeldgegevens? Je eigen gegevens blijven bewaard en onaangeraakt.')) kiesModus('demo'); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white text-sm">
+                <Eye className="w-5 h-5" /> Demo bekijken
+              </button>
+            )}
             {navItemsSecundair.map(({ to, icon: Icon, label }) => (
               <Link key={to} to={to} onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white text-sm">
@@ -181,6 +194,19 @@ export default function Layout({ children }) {
       {/* Main content */}
       <main className="flex-1 md:ml-64 pt-16 md:pt-0 min-h-screen overflow-x-hidden">
         <div className="p-4 md:p-8 max-w-6xl mx-auto w-full min-w-0">
+        {demo && (
+          <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p className="text-sm text-amber-300 flex-1 min-w-[200px]">
+              🎭 <strong>Demo-modus</strong> — fictieve voorbeeldgegevens. Je eigen gegevens zijn niet aangeraakt.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => { if (confirm('Demo terugzetten naar de beginstand?')) resetDemo(); }}
+                className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700">Demo resetten</button>
+              <button onClick={() => { if (confirm('Demo verlaten? Wijzigingen in de demo gaan verloren.')) sluitDemoAf(); }}
+                className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-slate-900 font-medium hover:bg-amber-400">Demo verlaten</button>
+            </div>
+          </div>
+        )}
           {children}
         </div>
       </main>

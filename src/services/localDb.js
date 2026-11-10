@@ -1,15 +1,18 @@
+// Versie: Fix126
 // Lokale database — vervangt Firebase Firestore
 // Gebruikt Dexie.js als wrapper rond IndexedDB
 // Data staat 100% lokaal in de browser van de gebruiker
 
 import Dexie from 'dexie';
+import { isDemo, DB_NAAM_DEMO, DB_NAAM_ECHT } from './modus';
 
 // ============ DATABASE SCHEMA ============
 // Spiegelt de Firestore structuur maar plat (genormaliseerd)
 // Firestore: users/{uid}/years/{year}/banks/{bankId}/accounts/{accountId}/positions/{posId}
 // Lokaal:    één tabel per entiteit met samengestelde sleutels
 
-const db = new Dexie('werkelijkRendement');
+// Demo-modus gebruikt een aparte database (echte data blijft onaangeraakt)
+const db = new Dexie(isDemo() ? DB_NAAM_DEMO : DB_NAAM_ECHT);
 
 db.version(1).stores({
   // Profiel & instellingen (één record per "gebruiker" — lokaal is er maar één)

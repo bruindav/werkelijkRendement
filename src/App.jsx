@@ -1,5 +1,5 @@
-// Versie: Fix117
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+// Versie: Fix126
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -14,6 +14,7 @@ import BackupPage from './pages/BackupPage';
 import PrivacyPage from './pages/PrivacyPage';
 import HelpPage from './pages/HelpPage';
 import DisclaimerPage from './pages/DisclaimerPage';
+import StartKeuze from './components/StartKeuze';
 
 const Laden = () => (
   <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -33,7 +34,13 @@ function AuthGuard({ children }) {
   return <Layout>{children}</Layout>;
 }
 
+const OPEN_PADEN = ['/privacy', '/disclaimer', '/help'];
+
 function AppRoutes() {
+  const { keuzeNodig, loading } = useApp();
+  const { pathname } = useLocation();
+  // Nieuwe gebruiker: eerst kiezen tussen demo en zelf beginnen
+  if (!loading && keuzeNodig && !OPEN_PADEN.includes(pathname)) return <StartKeuze />;
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
