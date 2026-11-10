@@ -1,4 +1,4 @@
-// Versie: Fix131
+// Versie: Fix132
 // Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
@@ -337,7 +337,16 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
     bankId = bestaandeBank.id;
   } else {
     bankId = genId();
-    await db.banken.add({ id: bankId, year: String(jaar), volgorde: bankenInJaar.length, naam: bankData.naam, ...bankData });
+    // Fix132: nieuwe bank alfabetisch tussen de bestaande banken plaatsen (bestaande volgorde blijft)
+    const opVolgorde = [...bankenInJaar].sort((a, b) => (a.volgorde ?? 999) - (b.volgorde ?? 999));
+    let invoegIdx = opVolgorde.findIndex(b => String(b.naam || '').localeCompare(String(bankData.naam || ''), 'nl', { sensitivity: 'base' }) > 0);
+    if (invoegIdx === -1) invoegIdx = opVolgorde.length;
+    opVolgorde.splice(invoegIdx, 0, { id: bankId, nieuw: true });
+    for (let i = 0; i < opVolgorde.length; i++) {
+      if (opVolgorde[i].nieuw) continue;
+      if (opVolgorde[i].volgorde !== i) await db.banken.update(opVolgorde[i].id, { volgorde: i });
+    }
+    await db.banken.add({ id: bankId, year: String(jaar), volgorde: invoegIdx, naam: bankData.naam, ...bankData });
   }
 
   const bestaandeRek = await db.rekeningen.filter(r => r.bankId === bankId).toArray();
