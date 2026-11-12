@@ -27,11 +27,11 @@ const REKENING_TYPES = [
 const typeInfo = (type) => REKENING_TYPES.find(t => t.value === type) || REKENING_TYPES[1];
 
 const UITBETALING_OPTIES = [
-  { value: 'bijgeschreven',  label: 'Tussentijds bijgeschreven (rente op rente)' },
-  { value: 'einde_looptijd', label: 'Pas bij einde looptijd (enkelvoudig)' },
-  { value: 'jaarlijks',      label: 'Jaarlijks uitgekeerd (saldo blijft gelijk)' },
-  { value: 'maandelijks',    label: 'Maandelijks uitgekeerd (saldo blijft gelijk)' },
-  { value: 'kwartaal',       label: 'Per kwartaal uitgekeerd (saldo blijft gelijk)' },
+  { value: 'bijgeschreven',  label: 'Tussentijds bijgeschreven' },
+  { value: 'einde_looptijd', label: 'Pas bij einde looptijd' },
+  { value: 'jaarlijks',      label: 'Jaarlijks uitgekeerd' },
+  { value: 'maandelijks',    label: 'Maandelijks uitgekeerd' },
+  { value: 'kwartaal',       label: 'Per kwartaal uitgekeerd' },
 ];
 
 function berekenDepositoEindbedrag(inleg, rentePct, startdatum, einddatum, uitbetalingType) {
@@ -160,7 +160,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
       <input type={opts.type || 'number'} step={opts.step || '0.01'}
         value={form[key]} onChange={e => set(key, e.target.value)}
         placeholder={opts.placeholder || ''}
-        className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        className="w-full min-w-0 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
     </div>
   );
 
@@ -195,7 +195,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
       {isDeposito && (
         <div className="bg-slate-900/40 rounded-xl p-3 space-y-2">
           <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">🔒 Looptijd</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
             {inp('Startdatum', 'deposito_startdatum', { type: 'date' })}
             {inp('Einddatum', 'deposito_einddatum', { type: 'date' })}
           </div>
@@ -214,7 +214,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
       {/* Rente — compacte 2x2 grid */}
       <div className="bg-slate-900/40 rounded-xl p-3 space-y-2">
         <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">📈 Rente</p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-slate-400 mb-1">Rente % / jaar</label>
             <div className="relative">
@@ -232,16 +232,16 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">
-              Ontvangen rente (€)
-              {verwachtRente !== null && <span className="ml-1 text-emerald-500 text-xs">≈ {fmt(verwachtRente)}</span>}
+            <label className="flex flex-wrap items-baseline justify-between gap-x-2 text-xs text-slate-400 mb-1">
+              <span>Ontvangen rente (€)</span>
+              {verwachtRente !== null && <span className="text-emerald-500 text-xs">≈ {fmt(verwachtRente)}</span>}
             </label>
-            <div className="flex gap-1">
+            <div className="flex gap-2">
               <input type="number" step="0.01" value={form.ontvangen_rente}
                 onChange={e => set('ontvangen_rente', e.target.value)} placeholder="0.00"
-                className="flex-1 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="flex-1 min-w-0 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <button onClick={autoRente} title="Auto-bereken"
-                className="bg-emerald-700/50 hover:bg-emerald-700 text-emerald-300 rounded-lg px-2 text-xs flex items-center gap-1">
+                className="flex-shrink-0 bg-emerald-700/50 hover:bg-emerald-700 text-emerald-300 rounded-lg px-3 py-2 text-xs flex items-center gap-1">
                 <Calculator className="w-3 h-3" /> Auto
               </button>
             </div>
@@ -259,10 +259,10 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
       {isDeposito && depositoCalc && (
         <div className="bg-amber-900/20 border border-amber-700/30 rounded-xl p-4">
           <p className="text-xs text-amber-400 font-medium mb-2 flex items-center gap-1">
-            <Calculator className="w-3.5 h-3.5" /> Verwacht eindbedrag op einddatum ({depositoCalc.jaren} jaar)
+            <Calculator className="w-3.5 h-3.5 flex-shrink-0" /> Verwacht eindbedrag op einddatum ({depositoCalc.jaren} jaar)
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-            <div><p className="text-xs text-slate-500">Inleg / startbedrag</p>
+          <div className="grid grid-cols-3 gap-2 text-sm">
+            <div><p className="text-xs text-slate-500">Inleg</p>
               <p className="text-white font-medium">{fmt(basis)}</p></div>
             <div><p className="text-xs text-slate-500">Totale rente</p>
               <p className="text-emerald-400 font-medium">{fmt(depositoCalc.totalRente)}</p></div>
