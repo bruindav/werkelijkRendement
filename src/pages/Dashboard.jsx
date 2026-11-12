@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken, getDashboardData } from '../hooks/useLocalDB';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatEuroGeheel, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
+import { eindeSaldo } from '../services/depositoEinde';
 import { getInstellingen } from '../services/localDb';
 import { laadMeta, laadHoudersMap, bepaalEigenaar, metaSleutel, EIGENAREN } from '../services/rekeningMeta';
 import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle, ChevronDown } from 'lucide-react';
@@ -197,13 +198,14 @@ export default function Dashboard() {
       let totaalBeleggenDec31 = 0;
       let totaalRendementSparen = 0;
       let totaalRendementBeleggen = 0;
+      let totaalEinde = 0;
       let aantalPosities = 0;
       const bankDetails = [];
 
       const allData = await getDashboardData(selectedYear);
 
       for (const bank of allData) {
-        let bankJan1 = 0, bankDec31 = 0, bankRendement = 0;
+        let bankJan1 = 0, bankDec31 = 0, bankRendement = 0, bankEinde = 0;
         const bankRekeningen = [];
 
         for (const rek of bank.rekeningen) {
@@ -234,7 +236,12 @@ export default function Dashboard() {
           }
 
           if (rekJan1 || rekDec31 || rekRendement) {
+            const ein = eindeSaldo(rek, selectedYear, rekDec31);
+            bankEinde += ein.bedrag;
+            totaalEinde += ein.bedrag;
             bankRekeningen.push({
+              einde: ein.bedrag,
+              eindeOnbekend: ein.onbekend,
               id: rek.id,
               naam: rek.naam,
               rekeningnummer: rek.rekeningnummer,
@@ -259,6 +266,7 @@ export default function Dashboard() {
             jan1: bankJan1,
             dec31: bankDec31,
             rendement: bankRendement,
+            einde: bankEinde,
             volgorde: bank.volgorde ?? 999,
             rekeningen: bankRekeningen.sort((a, b) => a.volgorde - b.volgorde),
           });
@@ -271,7 +279,7 @@ export default function Dashboard() {
 
       const vermogenSplit = { sparen: totaalSparenJan1, beleggen: totaalBeleggenJan1 };
       const vergelijk = vergelijkMethoden(totaalRendement, totaalVermogenJan1, selectedYear, instellingenRef.current, vermogenSplit);
-      setTotalen({ totaalRendement, totaalVermogenJan1, totaalVermogenDec31, aantalPosities, vergelijk, vermogenSplit,
+      setTotalen({ totaalEinde, totaalRendement, totaalVermogenJan1, totaalVermogenDec31, aantalPosities, vergelijk, vermogenSplit,
         totaalSparenJan1, totaalSparenDec31, totaalBeleggenJan1, totaalBeleggenDec31,
         totaalRendementSparen, totaalRendementBeleggen,
         bankDetails: bankDetails.sort((a, b) => String(a.naam || '').localeCompare(String(b.naam || ''), 'nl', { sensitivity: 'base' })) });
@@ -608,6 +616,7 @@ export default function Dashboard() {
               {[
                 { key: 'jan1', label: '1 jan' },
                 { key: 'dec31', label: '31 dec' },
+                { key: 'einde', label: 'Einde' },
                 { key: 'rendement', label: 'Rendement' },
               ].map(({ key, label }) => (
                 <button key={key} onClick={() => setMobieleKolom(key)}
@@ -620,10 +629,11 @@ export default function Dashboard() {
             </div>
 
             {/* Desktop kolomheaders */}
-            <div className="hidden sm:grid grid-cols-[1fr_120px_120px_100px_32px] gap-2 px-5 py-2 text-xs text-slate-500 border-b border-slate-800">
+            <div className="hidden sm:grid grid-cols-[1fr_120px_120px_120px_100px_32px] gap-2 px-5 py-2 text-xs text-slate-500 border-b border-slate-800">
               <span>Rekening</span>
               <span className="text-right">1 januari</span>
               <span className="text-right">31 december</span>
+              <span className="text-right" title="Verwacht saldo op einddatum (deposito's incl. rente)">Einde</span>
               <span className="text-right">Rendement</span>
               <span></span>
             </div>
@@ -641,11 +651,13 @@ export default function Dashboard() {
                   <div className="sm:hidden text-sm font-medium">
                     {mobieleKolom === 'jan1' && <span className="text-slate-300">{formatEuro(bank.jan1)}</span>}
                     {mobieleKolom === 'dec31' && <span className="text-slate-300">{formatEuro(bank.dec31)}</span>}
+                    {mobieleKolom === 'einde' && <span className="text-slate-300">{formatEuro(bank.einde)}</span>}
                     {mobieleKolom === 'rendement' && <span className={bank.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{bank.rendement >= 0 ? '+' : ''}{formatEuro(bank.rendement)}</span>}
                   </div>
                   <div className="hidden sm:flex items-center gap-6 text-sm">
                     <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.jan1)}</span>
                     <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.dec31)}</span>
+                    <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.einde)}</span>
                     <span className={`w-[100px] text-right font-medium ${bank.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {bank.rendement >= 0 ? '+' : ''}{formatEuro(bank.rendement)}
                     </span>
@@ -673,11 +685,13 @@ export default function Dashboard() {
                       <div className="sm:hidden text-xs">
                         {mobieleKolom === 'jan1' && <span className="text-slate-500">{formatEuro(rek.jan1)}</span>}
                         {mobieleKolom === 'dec31' && <span className="text-slate-500">{formatEuro(rek.dec31)}</span>}
+                        {mobieleKolom === 'einde' && <span className={rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-500'} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>}
                         {mobieleKolom === 'rendement' && <span className={rek.rendement >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'}>{rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}</span>}
                       </div>
                       <div className="hidden sm:flex items-center gap-6 text-xs">
                         <span className="w-[120px] text-right text-slate-500">{formatEuro(rek.jan1)}</span>
                         <span className="w-[120px] text-right text-slate-500">{formatEuro(rek.dec31)}</span>
+                        <span className={`w-[120px] text-right ${rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-500'}`} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>
                         <span className={`w-[100px] text-right ${rek.rendement >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'}`}>
                           {rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}
                         </span>
@@ -697,11 +711,13 @@ export default function Dashboard() {
                 <div className="sm:hidden text-sm font-bold">
                   {mobieleKolom === 'jan1' && <span className="text-white">{formatEuro(totalen.totaalVermogenJan1)}</span>}
                   {mobieleKolom === 'dec31' && <span className="text-white">{formatEuro(totalen.totaalVermogenDec31)}</span>}
+                  {mobieleKolom === 'einde' && <span className="text-white">{formatEuro(totalen.totaalEinde)}</span>}
                   {mobieleKolom === 'rendement' && <span className={totalen.totaalRendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{totalen.totaalRendement >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendement)}</span>}
                 </div>
                 <div className="hidden sm:flex items-center gap-6 text-sm">
                   <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenJan1)}</span>
                   <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenDec31)}</span>
+                  <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalEinde)}</span>
                   <span className={`w-[100px] text-right font-bold ${totalen.totaalRendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {totalen.totaalRendement >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendement)}
                   </span>
