@@ -1,4 +1,4 @@
-// Versie: Fix135
+// Versie: Fix136
 // Realistische (fictieve) voorbeelddata voor de demo-modus.
 // Alle namen, rekeningnummers en bedragen zijn verzonnen.
 // 2024 en 2025: de 31-dec-waarden van 2024 zijn de 1-jan-waarden van 2025.
@@ -133,7 +133,7 @@ export async function seedDemoData() {
   // Voorbeeld van eigenaar en doel per rekening
   const m = (type, naam, rekeningnummer) => metaSleutel({ type, naam, rekeningnummer }, '');
   await db.instellingen.put({
-    id: 'rekeningMeta', groepering: 'soort', houders: {},
+    id: 'rekeningMeta', filter: { eigenaar: 'alle', doel: 'alle' }, houders: {},
     rekeningen: {
       [m('sparen', 'Oranje Spaarrekening', 'NL00 DEMO 0123 4567 89')]: { eigenaar: 'samen', doel: 'Buffer' },
       [m('deposito', 'Termijndeposito 36 mnd', 'NL00 DEMO 0987 6543 21')]: { eigenaar: 'ik', doel: 'Verbouwing' },

@@ -1,4 +1,4 @@
-// Versie: Fix135
+// Versie: Fix136
 // Eigenaar (ik / partner / samen) en doel per rekening — blijft bewaard over jaren heen.
 // Opgeslagen in de instellingen-tabel onder id 'rekeningMeta' (zit dus ook in de lokale database).
 // Sleutel per rekening = soort + rekeningnummer (of bank + naam als er geen nummer is),
@@ -45,7 +45,7 @@ export async function laadMeta() {
   return {
     rekeningen: doc?.rekeningen || {},   // sleutel -> { eigenaar, doel }
     houders: doc?.houders || {},         // persoonsleutel (initiaal + achternaam) -> eigenaar (geleerd)
-    groepering: doc?.groepering || 'soort',
+    filter: doc?.filter || { eigenaar: 'alle', doel: 'alle' },   // laatst gekozen filter
   };
 }
 
@@ -61,10 +61,9 @@ export async function slaRekeningMetaOp(sleutel, { eigenaar, doel }, houders) {
   await bewaar(meta);
 }
 
-export async function slaGroeperingOp(groepering) {
-  const meta = await laadMeta();
-  meta.groepering = groepering;
-  await bewaar(meta);
+export async function slaFilterOp(filter) {
+  const doc = await db.instellingen.get(ID);
+  await bewaar({ ...(doc || {}), id: ID, filter });
 }
 
 // Effectieve eigenaar: expliciet gekozen > geleerd via houdernaam > meerdere houders = samen

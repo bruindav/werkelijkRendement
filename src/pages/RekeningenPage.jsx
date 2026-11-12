@@ -1,12 +1,12 @@
-// Versie: Fix135
+// Versie: Fix136
 // Rekeningenoverzicht: alle rekeningen gegroepeerd per soort, met saldo's en rente/dividend
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import db from '../services/localDb';
 import { formatEuro } from '../services/berekening';
 import Breadcrumb from '../components/Breadcrumb';
-import { laadMeta, slaRekeningMetaOp, slaGroeperingOp, metaSleutel, bepaalEigenaar, EIGENAREN } from '../services/rekeningMeta';
-import { Landmark, PiggyBank, Lock, TrendingUp, Wallet, Target, Users, Pencil, Check, X } from 'lucide-react';
+import { laadMeta, slaRekeningMetaOp, slaFilterOp, metaSleutel, bepaalEigenaar, EIGENAREN } from '../services/rekeningMeta';
+import { Landmark, PiggyBank, Lock, TrendingUp, Wallet, Pencil, Check, X } from 'lucide-react';
 
 const GROEPEN = [
   { type: 'rekening-courant', titel: 'Rekening courant', icon: Wallet },
@@ -168,42 +168,32 @@ export default function RekeningenPage() {
     await slaRekeningMetaOp(metaSleutel(r, r.bankNaam), waarden, r.houders);
     setMeta(await laadMeta());
   };
-  const kiesGroepering = async (g) => {
-    setMeta(m => ({ ...m, groepering: g }));
-    await slaGroeperingOp(g); // onthouden
+  const filter = meta.filter;
+  const zetFilter = async (nieuw) => {
+    const f = { ...filter, ...nieuw };
+    setMeta(m => ({ ...m, filter: f }));
+    await slaFilterOp(f); // onthouden
   };
+  const eigenaarOK = (r) => filter.eigenaar === 'alle' || metaVan(r).eigenaar === filter.eigenaar;
+  const doelOK = (r) => filter.doel === 'alle' || (filter.doel === '__geen' ? !metaVan(r).doel : metaVan(r).doel === filter.doel);
+  const zichtbaar = data.dit.filter(r => eigenaarOK(r) && doelOK(r));
+  const filterActief = filter.eigenaar !== 'alle' || filter.doel !== 'alle';
 
   const sorteer = (rs) => rs.sort((a, b) =>
     (a.bankNaam + a.naam).localeCompare(b.bankNaam + b.naam, 'nl', { sensitivity: 'base' }));
 
-  // ---- groepen opbouwen volgens gekozen groepering ----
-  let groepen;
-  if (meta.groepering === 'doel') {
-    const namen = [...new Set(data.dit.map(r => metaVan(r).doel))]
-      .sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'nl', { sensitivity: 'base' })));
-    groepen = namen.map(n => ({
-      key: `doel-${n}`, titel: n || 'Geen doel', icon: Target,
-      rekeningen: sorteer(data.dit.filter(r => metaVan(r).doel === n)),
-    }));
-  } else if (meta.groepering === 'eigenaar') {
-    groepen = [...EIGENAREN.map(e => ({ id: e.id, titel: e.label })), { id: null, titel: 'Niet ingesteld' }]
-      .map(e => ({
-        key: `eig-${e.id}`, titel: e.titel, icon: Users,
-        rekeningen: sorteer(data.dit.filter(r => metaVan(r).eigenaar === e.id)),
-      }));
-  } else {
-    const bekend = GROEPEN.map(g => g.type);
-    groepen = [...GROEPEN, { type: '__overig', titel: 'Overig', icon: Landmark }].map(g => ({
+  // Altijd gegroepeerd per soort rekening
+  const bekend = GROEPEN.map(g => g.type);
+  const groepen = [...GROEPEN, { type: '__overig', titel: 'Overig', icon: Landmark }]
+    .map(g => ({
       key: g.type, titel: g.titel, icon: g.icon,
-      rekeningen: sorteer(data.dit.filter(r => g.type === '__overig' ? !bekend.includes(r.type) : r.type === g.type)),
-    }));
-  }
-  groepen = groepen.filter(g => g.rekeningen.length > 0);
+      rekeningen: sorteer(zichtbaar.filter(r => g.type === '__overig' ? !bekend.includes(r.type) : r.type === g.type)),
+    }))
+    .filter(g => g.rekeningen.length > 0);
 
   const metVerwacht = (rs) => rs.map(r => ({ r, vw: verwacht(r, data.vorig) }));
   const som = (rs, f) => rs.reduce((t, x) => t + f(x), 0);
-  const alle = metVerwacht(data.dit);
-  const opties = [{ id: 'soort', label: 'Soort' }, { id: 'doel', label: 'Doel' }, { id: 'eigenaar', label: 'Eigenaar' }];
+  const alle = metVerwacht(zichtbaar);
 
   return (
     <div>
@@ -211,22 +201,36 @@ export default function RekeningenPage() {
       <h1 className="text-2xl font-bold text-white">Rekeningen</h1>
       <p className="text-slate-400 mt-1 mb-4">Overzicht per rekening · {selectedYear}</p>
 
-      <div className="flex items-center gap-2 mb-6">
-        <span className="text-xs text-slate-500">Groeperen op</span>
-        <div className="flex bg-slate-800 rounded-xl p-1">
-          {opties.map(o => (
-            <button key={o.id} onClick={() => kiesGroepering(o.id)}
-              className={`px-3 py-1.5 text-sm rounded-lg ${meta.groepering === o.id ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
-              {o.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6">
+        <label className="flex items-center gap-2 text-xs text-slate-500">
+          Van
+          <select value={filter.eigenaar} onChange={e => zetFilter({ eigenaar: e.target.value })}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white">
+            <option value="alle">Alle</option>
+            {EIGENAREN.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-500">
+          Doel
+          <select value={filter.doel} onChange={e => zetFilter({ doel: e.target.value })}
+            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white max-w-[12rem]">
+            <option value="alle">Alle</option>
+            {doelen.map(d => <option key={d} value={d}>{d}</option>)}
+            <option value="__geen">Geen doel</option>
+          </select>
+        </label>
+        {filterActief && (
+          <button onClick={() => zetFilter({ eigenaar: 'alle', doel: 'alle' })}
+            className="text-xs text-amber-300 hover:text-amber-200 flex items-center gap-1">
+            <X className="w-3.5 h-3.5" /> Filter wissen
+          </button>
+        )}
       </div>
 
       {groepen.length === 0 ? (
         <div className="text-center py-16 bg-slate-800/30 border border-slate-700 rounded-2xl">
-          <p className="text-slate-400">Geen rekeningen in {selectedYear}.</p>
-          <p className="text-slate-500 text-sm mt-1">Importeer een jaaroverzicht of voeg een bank toe.</p>
+          <p className="text-slate-400">{filterActief ? 'Geen rekeningen met dit filter.' : `Geen rekeningen in ${selectedYear}.`}</p>
+          <p className="text-slate-500 text-sm mt-1">{filterActief ? 'Pas het filter aan of wis het.' : 'Importeer een jaaroverzicht of voeg een bank toe.'}</p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -260,11 +264,11 @@ export default function RekeningenPage() {
           })}
 
           <section className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4">
-            <h2 className="text-white font-semibold mb-3">Totaal alle rekeningen</h2>
+            <h2 className="text-white font-semibold mb-3">{filterActief ? 'Totaal gefilterde rekeningen' : 'Totaal alle rekeningen'}</h2>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-              <Cijfer label="Saldo begin jaar">{formatEuro(som(data.dit, r => r.begin))}</Cijfer>
-              <Cijfer label={eindLabel}>{formatEuro(som(data.dit, r => r.eind))}</Cijfer>
-              <Cijfer label="Ontvangen rente / dividend"><span className="text-emerald-400">{formatEuro(som(data.dit, r => r.ontvangen))}</span></Cijfer>
+              <Cijfer label="Saldo begin jaar">{formatEuro(som(zichtbaar, r => r.begin))}</Cijfer>
+              <Cijfer label={eindLabel}>{formatEuro(som(zichtbaar, r => r.eind))}</Cijfer>
+              <Cijfer label="Ontvangen rente / dividend"><span className="text-emerald-400">{formatEuro(som(zichtbaar, r => r.ontvangen))}</span></Cijfer>
               <Cijfer label="Verwacht rente / dividend"><span className="text-sky-300">{formatEuro(som(alle, x => x.vw?.bedrag || 0))}</span></Cijfer>
             </div>
           </section>
