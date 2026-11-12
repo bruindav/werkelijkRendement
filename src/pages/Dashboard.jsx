@@ -134,6 +134,31 @@ export default function Dashboard() {
     Promise.all([laadMeta(), laadHoudersMap()]).then(([meta, houders]) => { if (actief) setEigenaarInfo({ meta, houders }); }).catch(() => {});
     return () => { actief = false; };
   }, [selectedYear]);
+  const [dashFilter, setDashFilter] = useState(() => {
+    try { return { eigenaar: 'alle', type: 'alle', doel: 'alle', ...JSON.parse(localStorage.getItem('wr_dashfilter') || '{}') }; }
+    catch { return { eigenaar: 'alle', type: 'alle', doel: 'alle' }; }
+  });
+  const zetDashFilter = (nieuw) => {
+    const f = { ...dashFilter, ...nieuw };
+    setDashFilter(f);
+    try { localStorage.setItem('wr_dashfilter', JSON.stringify(f)); } catch { /* geen opslag */ }
+  };
+  const filterActief = dashFilter.eigenaar !== 'alle' || dashFilter.type !== 'alle' || dashFilter.doel !== 'alle';
+  const eigenaarIdVan = (rek, bankNaam) => {
+    if (!eigenaarInfo.meta) return null;
+    const r = { ...rek, houders: rek.houders || eigenaarInfo.houders[metaSleutel(rek, bankNaam)] || '' };
+    return bepaalEigenaar(r, eigenaarInfo.meta, bankNaam);
+  };
+  const doelVan = (rek, bankNaam) => eigenaarInfo.meta?.rekeningen[metaSleutel(rek, bankNaam)]?.doel || '';
+  const rekMagTonen = (rek, bankNaam) => {
+    if (dashFilter.eigenaar !== 'alle' && eigenaarIdVan(rek, bankNaam) !== dashFilter.eigenaar) return false;
+    if (dashFilter.type !== 'alle' && (rek.type || 'beleggen') !== dashFilter.type) return false;
+    if (dashFilter.doel !== 'alle') {
+      const doel = doelVan(rek, bankNaam);
+      if (dashFilter.doel === '__geen' ? !!doel : doel !== dashFilter.doel) return false;
+    }
+    return true;
+  };
   const eigenaarVan = (rek, bankNaam) => {
     if (!eigenaarInfo.meta) return null;
     const r = { ...rek, houders: rek.houders || eigenaarInfo.houders[metaSleutel(rek, bankNaam)] || '' };
@@ -182,6 +207,7 @@ export default function Dashboard() {
         const bankRekeningen = [];
 
         for (const rek of bank.rekeningen) {
+          if (!rekMagTonen(rek, bank.naam)) continue;
           let rekJan1 = 0, rekDec31 = 0, rekRendement = 0;
 
           if (rek.type === 'beleggen' || !rek.type) {
@@ -254,7 +280,7 @@ export default function Dashboard() {
 
     laadTotalen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(',')]);
+  }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(','), dashFilter, eigenaarInfo]);
 
   const rendementPositief = totalen?.totaalRendement >= 0;
   const [mobieleKolom, setMobieleKolom] = useState('rendement'); // 'jan1' | 'dec31' | 'rendement'
@@ -264,7 +290,28 @@ export default function Dashboard() {
       {/* Header */}
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-slate-400 mt-1">Overzicht belastingjaar {selectedYear}</p>
+        <p className="text-slate-400 mt-1">Overzicht belastingjaar {selectedYear}{filterActief ? ' · gefilterd' : ''}</p>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3 mb-5">
+        {[
+          { sleutel: 'eigenaar', label: 'Eigenaar', opties: [['alle', 'Alle'], ...EIGENAREN.map(e => [e.id, e.label])] },
+          { sleutel: 'type', label: 'Type rekening', opties: [['alle', 'Alle'], ['rekening-courant', 'Rekening courant'], ['geldrekening', 'Geldrekening'], ['sparen', 'Spaarrekening'], ['deposito', 'Deposito'], ['beleggen', 'Beleggingsrekening']] },
+          { sleutel: 'doel', label: 'Doel', opties: [['alle', 'Alle'], ['__geen', 'Geen doel'], ...[...new Set(Object.values(eigenaarInfo.meta?.rekeningen || {}).map(x => x.doel).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nl', { sensitivity: 'base' })).map(x => [x, x])] },
+        ].map(f => (
+          <label key={f.sleutel} className="text-xs text-slate-400 flex flex-col gap-1">
+            {f.label}
+            <select value={dashFilter[f.sleutel]} onChange={e => zetDashFilter({ [f.sleutel]: e.target.value })}
+              className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-2 py-1.5">
+              {f.opties.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+        ))}
+        {filterActief && (
+          <button onClick={() => zetDashFilter({ eigenaar: 'alle', type: 'alle', doel: 'alle' })}
+            className="text-xs text-amber-300 hover:text-amber-200 pb-2">Filter wissen</button>
+        )}
       </div>
 
       {/* Stats — mobiel: compacte kaart, desktop: 4 blokken */}
