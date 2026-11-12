@@ -1,4 +1,4 @@
-// Versie: Fix135
+// Versie: Fix138
 // Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
@@ -359,8 +359,11 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
     const nr = normNr(rek.rekeningnummer || rek.iban);
 
     // Dubbel = zelfde type en zelfde rekeningnummer, of (zonder nummer) zelfde type + naam
+    // Saldo-rekeningen (sparen/deposito/rc/geld) onderling gelijk behandelen bij hetzelfde nummer
+    const SALDO_TYPES = ['sparen', 'deposito', 'rekening-courant', 'geldrekening'];
+    const zelfdeSoort = (r) => r.type === rek.type || (nr && SALDO_TYPES.includes(r.type) && SALDO_TYPES.includes(rek.type));
     const dubbele = bestaandeRek.find(r =>
-      r.type === rek.type && (
+      zelfdeSoort(r) && (
         nr && normNr(r.rekeningnummer)
           ? normNr(r.rekeningnummer) === nr
           : norm(r.naam) === norm(naam)));

@@ -1,4 +1,4 @@
-// Versie: Fix135
+// Versie: Fix138
 // PDF Parser - volledig client-side met pdf.js
 // Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO, Evi (Van Lanschot)
 // Fix101 - ABN AMRO parser herschreven voor nieuw PDF-formaat 2025
@@ -162,16 +162,19 @@ function parseAbnAmro(text) {
     const iban = line.replace(/\s/g, '');
     let bedragen = [], naam = '';
 
-    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+    // Fix138: alleen kijken tot de VOLGENDE rekening begint, en de eerste bedragenregel nemen.
+    // (Eerder werd doorgelezen tot in de volgende rekening, waardoor twee rekeningen dezelfde bedragen kregen.)
+    for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
       const volgende = lines[j].trim();
+      if (ibanPat.test(volgende)) break;
       if (bedragPat.test(volgende)) {
+        if (bedragen.length) continue;
         bedragen = volgende.split(/\s+/).map(s => {
           const neg = s.startsWith('-');
           const v = parseFloat(s.replace('-','').replace(/\./g,'').replace(',','.')) || 0;
           return neg ? -v : v;
         });
-      } else if (volgende && !ibanPat.test(volgende) && !bedragPat.test(volgende)
-                 && volgende.length > 1 && !naam) {
+      } else if (volgende && volgende.length > 1 && !naam) {
         naam = volgende;
       }
     }
@@ -185,7 +188,7 @@ function parseAbnAmro(text) {
     rekeningen.push({
       naam: naam ? `${naam} (${iban})` : iban,
       weergave_naam: naam || iban,
-      type: 'sparen',
+      type: /priv[eé]rekening|betaalrekening|zakelijk|creditcard/i.test(naam) ? 'rekening-courant' : 'sparen',
       iban,
       rekeningnummer: iban,
       jan1_saldo: bedragen[0] || 0,
@@ -334,6 +337,9 @@ function parseEviTekst(text) {
 const NAAM = String.raw`(?:[A-Z]\.){1,5}\s?(?:(?:de|van|der|den|ten|ter|het|'t)\s)*[A-Z][A-Za-z'\-]+|[A-Z][a-z]+(?:\s[A-Z][a-z]+)*(?:\s(?:de|van|der|den|ten|ter|het))*\s[A-Z][A-Za-z'\-]+`;
 export function vindHouders(text) {
   const t = String(text || '');
+  // ABN AMRO: "De heer D.R. de Bruin en/of de heer E.A. Vrijvogel"
+  const enOf = t.match(new RegExp(String.raw`(?:De heer|Mevrouw|Dhr\.|Mevr\.)\s+(${NAAM})\s+en\/of[\s\S]{0,80}?(?:heer|mevrouw)\s+(${NAAM})`));
+  if (enOf) return `${enOf[1].trim()}, ${enOf[2].trim()}`;
   const lijst = t.match(new RegExp(String.raw`Rekeninghouder\(s\)\s+((?:${NAAM})(?:\s*[,&]\s*(?:${NAAM}))*)`));
   if (lijst) return lijst[1].trim();
   const opNaam = t.match(new RegExp(String.raw`Op naam van:\s*(?:de heer|mevrouw|mevr\.|dhr\.)?\s*(${NAAM})`, 'i'));
