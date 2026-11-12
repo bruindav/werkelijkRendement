@@ -1,4 +1,4 @@
-// Versie: Fix136
+// Versie: Fix141
 // Eigenaar (ik / partner / samen) en doel per rekening — blijft bewaard over jaren heen.
 // Opgeslagen in de instellingen-tabel onder id 'rekeningMeta' (zit dus ook in de lokale database).
 // Sleutel per rekening = soort + rekeningnummer (of bank + naam als er geen nummer is),
@@ -17,6 +17,8 @@ export const EIGENAREN = [
 ];
 
 export function metaSleutel(rek, bankNaam) {
+  // Raisin: alle potjes delen één IBAN, het kenmerk (FDA_...) is uniek per rekening
+  if (rek.kenmerk) return `${rek.type}|kenmerk:${normNr(rek.kenmerk)}`;
   const nr = normNr(rek.rekeningnummer);
   return nr
     ? `${rek.type}|nr:${nr}`

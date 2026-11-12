@@ -97,6 +97,7 @@ function RekeningKaart({ r, eindLabel, vw, eigenaar, doel, doelen, onOpslaan }) 
           <p className="text-xs text-slate-500 mt-0.5">
             {r.bankNaam}{r.rekeningnummer ? ` · ${r.rekeningnummer}` : ''}
           </p>
+          {r.kenmerk && <p className="text-xs text-slate-500 font-mono mt-0.5">{r.kenmerk}</p>}
           <div className="flex flex-wrap gap-1.5 mt-2">
             <span className={`text-[11px] px-2 py-0.5 rounded-full ${eigenaarLabel ? 'bg-blue-500/15 text-blue-300' : 'bg-slate-800 text-slate-500'}`}>
               {eigenaarLabel || 'Eigenaar?'}
