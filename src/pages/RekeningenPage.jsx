@@ -1,4 +1,4 @@
-// Versie: Fix136
+// Versie: Fix137
 // Rekeningenoverzicht: alle rekeningen gegroepeerd per soort, met saldo's en rente/dividend
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
@@ -6,10 +6,11 @@ import db from '../services/localDb';
 import { formatEuro } from '../services/berekening';
 import Breadcrumb from '../components/Breadcrumb';
 import { laadMeta, slaRekeningMetaOp, slaFilterOp, metaSleutel, bepaalEigenaar, EIGENAREN } from '../services/rekeningMeta';
-import { Landmark, PiggyBank, Lock, TrendingUp, Wallet, Pencil, Check, X } from 'lucide-react';
+import { Landmark, PiggyBank, Lock, TrendingUp, Wallet, Banknote, Pencil, Check, X } from 'lucide-react';
 
 const GROEPEN = [
   { type: 'rekening-courant', titel: 'Rekening courant', icon: Wallet },
+  { type: 'geldrekening', titel: 'Geldrekening', icon: Banknote },
   { type: 'sparen', titel: 'Spaarrekening', icon: PiggyBank },
   { type: 'deposito', titel: 'Deposito', icon: Lock },
   { type: 'beleggen', titel: 'Beleggingsrekening', icon: TrendingUp },
@@ -17,6 +18,19 @@ const GROEPEN = [
 
 const norm = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const normNr = (t) => String(t || '').replace(/\s+/g, '').toLowerCase();
+
+// Rekeninghouder(s) kunnen in een ander jaar bekend zijn (bijv. na kopiëren van een jaar):
+// zoek per rekening de houders in alle jaren.
+async function laadHoudersMap() {
+  const [banken, rekeningen] = await Promise.all([db.banken.toArray(), db.rekeningen.toArray()]);
+  const map = {};
+  for (const r of rekeningen) {
+    if (!r.houders) continue;
+    const bank = banken.find(b => b.id === r.bankId);
+    map[metaSleutel(r, bank?.naam || '')] = r.houders;
+  }
+  return map;
+}
 
 async function laadJaar(jaar) {
   const y = String(jaar);
@@ -30,6 +44,7 @@ async function laadJaar(jaar) {
     return {
       ...r,
       bankNaam: bank?.naam || '',
+      sleutelBron: bank?.naam || '',
       begin: isBel ? pos.reduce((t, p) => t + (p.jan1_waarde || 0), 0) : (r.jan1_saldo || 0),
       eind: isBel ? pos.reduce((t, p) => t + (p.dec31_waarde || 0), 0) : (r.dec31_saldo || 0),
       ontvangen: isBel ? pos.reduce((t, p) => t + (p.dividend || 0) + (p.rente || 0), 0) : (r.ontvangen_rente || 0),
@@ -146,7 +161,8 @@ export default function RekeningenPage() {
   useEffect(() => {
     let actief = true;
     (async () => {
-      const [dit, vorig, m] = await Promise.all([laadJaar(selectedYear), laadJaar(Number(selectedYear) - 1), laadMeta()]);
+      const [dit, vorig, m, houdersMap] = await Promise.all([laadJaar(selectedYear), laadJaar(Number(selectedYear) - 1), laadMeta(), laadHoudersMap()]);
+      for (const r of dit) if (!r.houders) r.houders = houdersMap[metaSleutel(r, r.bankNaam)] || '';
       if (actief) { setData({ dit, vorig }); setMeta(m); }
     })();
     return () => { actief = false; };
@@ -276,7 +292,7 @@ export default function RekeningenPage() {
           <p className="text-xs text-slate-500">
             Verwacht: spaar-, deposito- en betaalrekeningen = saldo × rentepercentage (alleen als dat percentage bekend is);
             beleggingsrekeningen = ontvangen dividend/rente van het vorige jaar. Het zijn schattingen, geen garanties.
-            Eigenaar en doel gelden voor alle jaren en worden onthouden.
+            Eigenaar en doel gelden voor alle jaren en worden onthouden. Heeft een rekening één houder, kies dan eenmalig Ik of Partner: andere rekeningen met dezelfde naam worden daarna automatisch ingevuld.
           </p>
         </div>
       )}

@@ -1,3 +1,4 @@
+// Versie: Fix137
 // Fix113 - SpaarDepositoForm compact met saldi-tabel
 // Fix115 - Saldo invoervelden ruimer voor grote bedragen
 // Fix106 - Rekening-courant type toegevoegd
@@ -18,8 +19,12 @@ const REKENING_TYPES = [
   { value: 'beleggen', label: 'Beleggingsrekening', icon: TrendingUp, kleur: 'purple', emoji: '📈' },
   { value: 'sparen',   label: 'Spaarrekening',      icon: PiggyBank,  kleur: 'emerald', emoji: '🏦' },
   { value: 'deposito', label: 'Deposito',            icon: Lock,       kleur: 'amber',   emoji: '🔒' },
+  { value: 'rekening-courant', label: 'Rekening courant', icon: CreditCard, kleur: 'sky',  emoji: '💳' },
+  { value: 'geldrekening',     label: 'Geldrekening',     icon: CreditCard, kleur: 'blue', emoji: '💶' },
 ];
-const typeInfo = (type) => REKENING_TYPES.find(t => t.value === type) || REKENING_TYPES[0];
+// Tailwind-safelist (kleuren worden dynamisch samengesteld):
+// bg-sky-600/30 border-sky-500/50 text-sky-300 bg-blue-600/30 border-blue-500/50 text-blue-300
+const typeInfo = (type) => REKENING_TYPES.find(t => t.value === type) || REKENING_TYPES[1];
 
 const UITBETALING_OPTIES = [
   { value: 'maandelijks',    label: 'Maandelijks' },
@@ -479,7 +484,7 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
               </div>
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Type</label>
-                <div className="flex gap-1">
+                <div className="flex gap-1 flex-wrap">
                   {REKENING_TYPES.filter(t => t.value !== 'beleggen').map(t => (
                     <button key={t.value}
                       onClick={() => onUpdate(rek.id, { type: t.value })}

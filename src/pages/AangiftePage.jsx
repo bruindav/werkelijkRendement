@@ -1,4 +1,4 @@
-// Versie: Fix125
+// Versie: Fix137
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { getAangifteData } from '../hooks/useLocalDB';
@@ -110,7 +110,7 @@ export default function AangiftePage() {
     laadData();
   }, [user?.uid, year]);
 
-  const typeEmoji = (type) => type === 'beleggen' ? '📈' : type === 'deposito' ? '🔒' : type === 'rekening-courant' ? '💳' : '🏦';
+  const typeEmoji = (type) => type === 'beleggen' ? '📈' : type === 'deposito' ? '🔒' : type === 'rekening-courant' ? '💳' : type === 'geldrekening' ? '💶' : '🏦';
 
   return (
     <Layout>

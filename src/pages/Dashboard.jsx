@@ -1,4 +1,4 @@
-// Versie: Fix133
+// Versie: Fix137
 // Fix116 - Dashboard: sparen/beleggen split, toggle bank specificatie
 // Fix100 - getDoc Firebase vervangen door getInstellingen localDb
 import { useState, useEffect, useRef } from 'react';
@@ -569,7 +569,7 @@ export default function Dashboard() {
 
                 {/* Rekeningen onder de bank */}
                 {bank.rekeningen.map(rek => {
-                  const typeEmoji = rek.type === 'beleggen' ? '📈' : rek.type === 'deposito' ? '🔒' : rek.type === 'rekening-courant' ? '💳' : '🏦';
+                  const typeEmoji = rek.type === 'beleggen' ? '📈' : rek.type === 'deposito' ? '🔒' : (rek.type === 'rekening-courant') ? '💳' : rek.type === 'geldrekening' ? '💶' : '🏦';
                   return (
                     <Link
                       key={rek.id}
