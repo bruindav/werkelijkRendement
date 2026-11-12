@@ -1,4 +1,4 @@
-// Versie: Fix138
+// Versie: Fix140
 // PDF Parser - volledig client-side met pdf.js
 // Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO, Evi (Van Lanschot)
 // Fix101 - ABN AMRO parser herschreven voor nieuw PDF-formaat 2025
@@ -41,12 +41,12 @@ function parseCentraalBeheer(text) {
   const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
   const rekeningen = [];
 
-  const blokken = text.split(/Je jaaroverzicht \d{4}\n/);
+  const blokken = text.split(/Je jaaroverzicht \d{4}\s*\n?/);
   for (const blok of blokken.slice(1)) {
     const lines = blok.trim().split('\n');
     const naam = lines[0]?.trim();
     if (!naam || naam.length < 3) continue;
-    const rekMatch = blok.match(/Rekeningnummer:\s*(.+)/);
+    const rekMatch = blok.match(/Rekeningnummer:\s*([A-Z0-9][A-Z0-9 ]*?)\s*(?:\n|Op naam|$)/);
     const rekeningnummer = rekMatch ? rekMatch[1].trim() : '';
     const saldi = [...blok.matchAll(/Saldo 01-01-\d{4}\s*€\s*([\d.,]+)/g)].map(m => parseBedrag(m[1]));
     const renteMatch = blok.match(/Totaal ontvangen rente in \d{4}\s*€\s*([\d.,]+)/);

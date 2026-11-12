@@ -1,4 +1,4 @@
-// Versie: Fix139
+// Versie: Fix140
 // Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
@@ -391,11 +391,24 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
     // Saldo-rekeningen (sparen/deposito/rc/geld) onderling gelijk behandelen bij hetzelfde nummer
     const SALDO_TYPES = ['sparen', 'deposito', 'rekening-courant', 'geldrekening'];
     const zelfdeSoort = (r) => r.type === rek.type || (nr && SALDO_TYPES.includes(r.type) && SALDO_TYPES.includes(rek.type));
-    const dubbele = bestaandeRek.find(r =>
+    let dubbele = bestaandeRek.find(r =>
       zelfdeSoort(r) && (
         nr && normNr(r.rekeningnummer)
           ? normNr(r.rekeningnummer) === nr
           : norm(r.naam) === norm(naam)));
+    // Herstel: eerder met een verkeerd (gedeeld) rekeningnummer geïmporteerd? Herken aan identieke bedragen.
+    if (!dubbele && nr && SALDO_TYPES.includes(rek.type)) {
+      const zelfdeBedragen = bestaandeRek.find(r => SALDO_TYPES.includes(r.type) && normNr(r.rekeningnummer) !== nr
+        && Math.abs((r.jan1_saldo || 0) - (rek.jan1_saldo || 0)) < 0.005
+        && Math.abs((r.dec31_saldo || 0) - (rek.dec31_saldo || 0)) < 0.005
+        && Math.abs((r.ontvangen_rente || 0) - (rek.ontvangen_rente || 0)) < 0.005);
+      if (zelfdeBedragen) {
+        await db.rekeningen.update(zelfdeBedragen.id, { rekeningnummer: rek.rekeningnummer || rek.iban });
+        zelfdeBedragen.rekeningnummer = rek.rekeningnummer || rek.iban;
+        bijgewerkt.push(naam || 'rekening');
+        continue;
+      }
+    }
     if (dubbele) {
       if (rek.houders && !dubbele.houders) await db.rekeningen.update(dubbele.id, { houders: rek.houders });
       // Eerder geïmporteerd zonder dividend/rente? Dan alsnog aanvullen.

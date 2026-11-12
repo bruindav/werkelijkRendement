@@ -1,3 +1,3 @@
-// Versie: Fix139
+// Versie: Fix140
 // Enige plek waar het versienummer staat — bij elke Fix ophogen.
-export const APP_VERSIE = 'Fix139';
+export const APP_VERSIE = 'Fix140';
