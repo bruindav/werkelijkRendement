@@ -1,12 +1,11 @@
-// Versie: Fix132
+// Versie: Fix133
 // JaarOverzicht met drag & drop volgorde
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
-import DragLijst, { DragHandle } from '../components/DragLijst';
-import { ArrowDownAZ, Building2, Plus, Trash2, ArrowRight, X, Check, Edit3, Lock } from 'lucide-react';
+import { Building2, Plus, Trash2, ArrowRight, X, Check, Edit3, Lock } from 'lucide-react';
 
 function BankForm({ onSave, onCancel, initial = {} }) {
   const [naam, setNaam] = useState(initial.naam || '');
@@ -45,7 +44,6 @@ function BankRij({ bank, year, onUpdate, onVerwijder, dragHandleProps }) {
   return (
     <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 sm:p-5 flex items-center gap-2 group">
       {/* Drag handle */}
-      <DragHandle dragHandleProps={dragHandleProps} />
 
       <Link to={`/jaar/${year}/bank/${bank.id}`} className="flex items-center gap-4 flex-1 min-w-0">
         <div className="w-11 h-11 bg-blue-600/20 border border-blue-600/30 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -91,13 +89,6 @@ export default function JaarOverzicht() {
     await slaVolgorde(nieuw);
   };
 
-  // Fix132: alle banken van dit jaar op naam (A–Z) zetten
-  const sorteerAlfabetisch = async () => {
-    const gesorteerd = [...banken].sort((a, b) =>
-      String(a.naam || '').localeCompare(String(b.naam || ''), 'nl', { sensitivity: 'base' }));
-    await slaVolgorde(gesorteerd);
-  };
-
   return (
     <div>
       <Breadcrumb items={[{ label: `Jaar ${year}` }]} />
@@ -107,12 +98,6 @@ export default function JaarOverzicht() {
           <p className="text-slate-400 mt-1">Belastingjaar {year}</p>
         </div>
         <div className="flex gap-2">
-          {banken.length > 1 && (
-            <button onClick={sorteerAlfabetisch}
-              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl px-3 py-2.5 text-sm">
-              <ArrowDownAZ className="w-4 h-4" /> A–Z
-            </button>
-          )}
           <button onClick={() => setToonForm(true)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium">
             <Plus className="w-4 h-4" /> Bank toevoegen
@@ -146,19 +131,12 @@ export default function JaarOverzicht() {
         <>
         {/* Bank-limiet melding */}
 
-        <DragLijst
-          items={banken}
-          onVolgorde={handleVolgorde}
-          renderItem={(bank, dragHandleProps) => (
-            <BankRij
-              bank={bank}
-              year={year}
-              onUpdate={updateBank}
-              onVerwijder={handleVerwijder}
-              dragHandleProps={dragHandleProps}
-            />
-          )}
-        />
+        <div className="space-y-3">
+          {banken.map(bank => (
+            <BankRij key={bank.id} bank={bank} year={year}
+              onUpdate={updateBank} onVerwijder={handleVerwijder} />
+          ))}
+        </div>
         </>
       )}
     </div>

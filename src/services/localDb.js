@@ -1,4 +1,4 @@
-// Versie: Fix126
+// Versie: Fix133
 // Lokale database — vervangt Firebase Firestore
 // Gebruikt Dexie.js als wrapper rond IndexedDB
 // Data staat 100% lokaal in de browser van de gebruiker
@@ -38,7 +38,9 @@ export function genId() {
 // Haal alle banken op voor een jaar, gesorteerd op volgorde
 export async function getBanken(year) {
   const lijst = await db.banken.where('year').equals(year).toArray();
-  return lijst.sort((a, b) => (a.volgorde ?? 999) - (b.volgorde ?? 999));
+  // Fix133: banken altijd alfabetisch (Raisin-banken staan zo bij elkaar)
+  return lijst.sort((a, b) =>
+    String(a.naam || '').localeCompare(String(b.naam || ''), 'nl', { sensitivity: 'base' }));
 }
 
 // Haal alle rekeningen op voor een bank

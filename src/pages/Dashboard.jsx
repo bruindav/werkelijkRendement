@@ -1,4 +1,4 @@
-// Versie: Fix116/118/119/120/121/122/123/124
+// Versie: Fix133
 // Fix116 - Dashboard: sparen/beleggen split, toggle bank specificatie
 // Fix100 - getDoc Firebase vervangen door getInstellingen localDb
 import { useState, useEffect, useRef } from 'react';
@@ -232,7 +232,7 @@ export default function Dashboard() {
       setTotalen({ totaalRendement, totaalVermogenJan1, totaalVermogenDec31, aantalPosities, vergelijk, vermogenSplit,
         totaalSparenJan1, totaalSparenDec31, totaalBeleggenJan1, totaalBeleggenDec31,
         totaalRendementSparen, totaalRendementBeleggen,
-        bankDetails: bankDetails.sort((a, b) => a.volgorde - b.volgorde) });
+        bankDetails: bankDetails.sort((a, b) => String(a.naam || '').localeCompare(String(b.naam || ''), 'nl', { sensitivity: 'base' })) });
       setLoadingTotalen(false);
     }
 
