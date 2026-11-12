@@ -27,11 +27,11 @@ const REKENING_TYPES = [
 const typeInfo = (type) => REKENING_TYPES.find(t => t.value === type) || REKENING_TYPES[1];
 
 const UITBETALING_OPTIES = [
-  { value: 'maandelijks',    label: 'Maandelijks' },
-  { value: 'kwartaal',       label: 'Per kwartaal' },
-  { value: 'jaarlijks',      label: 'Jaarlijks' },
-  { value: 'einde_looptijd', label: 'Einde looptijd' },
-  { value: 'bijgeschreven',  label: 'Bijgeschreven (rente op rente)' },
+  { value: 'bijgeschreven',  label: 'Tussentijds bijgeschreven (rente op rente)' },
+  { value: 'einde_looptijd', label: 'Pas bij einde looptijd (enkelvoudig)' },
+  { value: 'jaarlijks',      label: 'Jaarlijks uitgekeerd (saldo blijft gelijk)' },
+  { value: 'maandelijks',    label: 'Maandelijks uitgekeerd (saldo blijft gelijk)' },
+  { value: 'kwartaal',       label: 'Per kwartaal uitgekeerd (saldo blijft gelijk)' },
 ];
 
 function berekenDepositoEindbedrag(inleg, rentePct, startdatum, einddatum, uitbetalingType) {
@@ -41,17 +41,18 @@ function berekenDepositoEindbedrag(inleg, rentePct, startdatum, einddatum, uitbe
   const dagenTotaal = Math.max(0, (eind - start) / (1000 * 60 * 60 * 24));
   const jaren = dagenTotaal / 365;
   const r = rentePct / 100;
-  let eindbedrag;
+  let eindbedrag, totalRente;
   if (uitbetalingType === 'bijgeschreven') {
-    eindbedrag = inleg * Math.pow(1 + r / 365, dagenTotaal);
-  } else if (uitbetalingType === 'jaarlijks' || uitbetalingType === 'einde_looptijd') {
-    eindbedrag = inleg * Math.pow(1 + r, jaren);
-  } else if (uitbetalingType === 'maandelijks') {
-    eindbedrag = inleg * Math.pow(1 + r / 12, jaren * 12);
+    eindbedrag = inleg * Math.pow(1 + r / 365, dagenTotaal);   // tussentijds bijgeschreven: rente op rente
+    totalRente = eindbedrag - inleg;
+  } else if (['jaarlijks', 'maandelijks', 'kwartaal'].includes(uitbetalingType)) {
+    totalRente = inleg * r * jaren;                             // rente wordt tussentijds uitgekeerd: saldo blijft gelijk
+    eindbedrag = inleg;
   } else {
-    eindbedrag = inleg * (1 + r * jaren);
+    totalRente = inleg * r * jaren;                             // pas bij einde looptijd (enkelvoudig)
+    eindbedrag = inleg + totalRente;
   }
-  return { eindbedrag, totalRente: eindbedrag - inleg, jaren: jaren.toFixed(1) };
+  return { eindbedrag, totalRente, jaren: jaren.toFixed(1) };
 }
 
 // ============ REKENING NAAM FORM ============
@@ -142,7 +143,6 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
     if (isNaN(s) || isNaN(p)) return null;
     const r = p / 100;
     if (form.uitbetaling_type === 'bijgeschreven') return s * (Math.pow(1 + r / 365, 365) - 1);
-    if (form.uitbetaling_type === 'maandelijks')   return s * (Math.pow(1 + r / 12, 12) - 1);
     return s * r;
   })();
 
@@ -225,7 +225,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Uitbetaling</label>
+            <label className="block text-xs text-slate-400 mb-1">Rente wordt…</label>
             <select value={form.uitbetaling_type} onChange={e => set('uitbetaling_type', e.target.value)}
               className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               {UITBETALING_OPTIES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -270,9 +270,9 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
               <p className="text-white font-bold">{fmt(depositoCalc.eindbedrag)}</p></div>
           </div>
           <p className="text-xs text-slate-500 mt-2">
-            {form.uitbetaling_type === 'bijgeschreven' ? '* Dagelijks samengestelde rente'
-              : form.uitbetaling_type === 'jaarlijks' || form.uitbetaling_type === 'einde_looptijd'
-              ? '* Jaarlijks samengestelde rente' : '* Samengestelde rente'}
+            {form.uitbetaling_type === 'bijgeschreven' ? '* Rente wordt tussentijds bijgeschreven (dagelijks samengesteld)'
+              : form.uitbetaling_type === 'einde_looptijd' ? '* Enkelvoudige rente, pas uitbetaald bij einde looptijd'
+              : '* Rente wordt tussentijds uitgekeerd; het saldo van het deposito blijft gelijk'}
           </p>
         </div>
       )}

@@ -21,9 +21,8 @@ export function eindeSaldo(rek, jaar, dec31) {
   const r = pct / 100;
   const t = rek.uitbetaling_type;
   let bedrag;
-  if (t === 'bijgeschreven') bedrag = dec31 * Math.pow(1 + r / 365, dagen);
-  else if (t === 'jaarlijks' || t === 'einde_looptijd') bedrag = dec31 * Math.pow(1 + r, dagen / 365);
-  else if (t === 'maandelijks') bedrag = dec31 * Math.pow(1 + r / 12, (dagen / 365) * 12);
-  else bedrag = dec31 * (1 + r * dagen / 365);
+  if (t === 'bijgeschreven') bedrag = dec31 * Math.pow(1 + r / 365, dagen);        // tussentijds bijgeschreven
+  else if (['jaarlijks', 'maandelijks', 'kwartaal'].includes(t)) bedrag = dec31;    // rente wordt uitgekeerd
+  else bedrag = dec31 * (1 + r * dagen / 365);                                       // pas bij einde looptijd
   return { bedrag, onbekend: false };
 }
