@@ -595,10 +595,10 @@ export default function Dashboard() {
                       className="flex items-center gap-3 px-5 py-2.5 pl-14 hover:bg-slate-900/30 transition-colors group"
                     >
                       <span className="text-base flex-shrink-0">{typeEmoji}</span>
-                      <span className="text-sm text-slate-400 flex-1 truncate">{rek.naam}</span>
-                      {(() => { const e = eigenaarVan(rek, bank.naam); return (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${e ? 'bg-blue-500/15 text-blue-300' : 'bg-slate-800 text-slate-600'}`}>{e || '?'}</span>
+                      {(() => { const e = eigenaarVan(rek, bank.naam); const letter = e ? e[0] : '?'; return (
+                        <span title={e || 'Eigenaar onbekend'} className={`w-4 h-4 flex items-center justify-center rounded text-[9px] font-bold flex-shrink-0 ${e ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-600'}`}>{letter}</span>
                       ); })()}
+                      <span className="text-sm text-slate-400 flex-1 leading-tight break-words">{rek.naam}</span>
                       {/* Mobiel */}
                       <div className="sm:hidden text-xs">
                         {mobieleKolom === 'jan1' && <span className="text-slate-500">{formatEuro(rek.jan1)}</span>}
