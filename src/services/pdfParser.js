@@ -1,4 +1,4 @@
-// Versie: Fix140
+// Versie: Fix144
 // PDF Parser - volledig client-side met pdf.js
 // Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO, Evi (Van Lanschot)
 // Fix101 - ABN AMRO parser herschreven voor nieuw PDF-formaat 2025
@@ -30,6 +30,7 @@ export function detectBankType(text) {
     if (text.includes('Beleggingsrekening') && text.includes('Waarde 1 januari')) return 'cb_beleggen';
     return 'centraal_beheer';
   }
+  if (/ING Bank N\.V\./.test(text) && /ING (Betaalrekening|Oranje Spaarrekening|Spaarrekening|Deposito|Bonus)/i.test(text)) return 'ing';
   if (text.toLowerCase().includes('raisin')) return 'raisin';
   if (text.includes('ABN AMRO')) return 'abn_amro';
   return 'onbekend';
@@ -138,6 +139,41 @@ function parseRaisin(text) {
   }
 
   return { bank: 'Raisin', jaar, rekeningen, bankGroepen, type: 'raisin' };
+}
+
+// ============ ING ============
+// Jaaroverzicht: per product een blok "ING <Product>: <nummer> <naam>", gevolgd door
+// "Saldo op 01-01-2025 x", "Saldo op 31-12-2025 y" en (sparen) "Rente, ontvangen in 2025 z".
+function parseIng(text) {
+  const jaarMatch = text.match(/Jaaroverzicht (\d{4})/i);
+  const jaar = jaarMatch ? parseInt(jaarMatch[1]) : null;
+  const rekeningen = [];
+  const hMatch = text.match(/\n\s*(?:Mw|Mevr|Mevrouw|Dhr|De heer|Hr)\.?\s+([A-Z][^\n]{2,60}?)\s*\n/);
+  const houders = hMatch ? hMatch[1].replace(/^([A-Z])\s+/, '$1. ').trim() : '';
+
+  const blokken = text.split(/^\s*ING\s+(?=[A-Za-zÀ-ÿ ]+:)/m).slice(1);
+  for (const blok of blokken) {
+    const kop = blok.split('\n')[0];
+    const [productRaw, rest = ''] = [kop.slice(0, kop.indexOf(':')).trim(), kop.slice(kop.indexOf(':') + 1).trim()];
+    const nrMatch = rest.match(/^(NL\d{2}\s?[A-Z]{4}(?:\s?\d{4}){2}\s?\d{2}|[A-Z]?\s?\d[\d\- ]*\d)/);
+    const rekeningnummer = nrMatch ? nrMatch[1].trim() : '';
+    const p = productRaw.toLowerCase();
+    const jan = blok.match(/Saldo op 01-01-\d{4}\s+(-?[\d.,]+)/);
+    const dec = blok.match(/Saldo op 31-12-\d{4}\s+(-?[\d.,]+)/);
+    const rente = blok.match(/Rente,? ontvangen in \d{4}\s+(-?[\d.,]+)/);
+    if (!jan && !dec) continue;
+    const type = p.includes('betaal') ? 'rekening-courant' : p.includes('deposito') ? 'deposito' : 'sparen';
+    rekeningen.push({
+      naam: `ING ${productRaw}${rekeningnummer ? ` (${rekeningnummer})` : ''}`,
+      weergave_naam: `ING ${productRaw}`,
+      type, rekeningnummer,
+      jan1_saldo: jan ? parseBedrag(jan[1]) : 0,
+      dec31_saldo: dec ? parseBedrag(dec[1]) : 0,
+      ontvangen_rente: rente ? parseBedrag(rente[1]) : 0,
+      rente_pct: 0, kosten: 0, notitie: '',
+    });
+  }
+  return { bank: 'ING', jaar, rekeningen, type: 'ing', houders };
 }
 
 // ============ ABN AMRO ============
@@ -353,7 +389,7 @@ export function vindHouders(text) {
 
 export function parseerPDF(text) {
   const resultaat = parseerPDFBasis(text);
-  const houders = vindHouders(text);
+  const houders = resultaat?.houders || vindHouders(text);
   if (houders && resultaat) {
     const zet = (rs) => (rs || []).forEach(r => { r.houders = houders; });
     zet(resultaat.rekeningen);
@@ -368,6 +404,7 @@ function parseerPDFBasis(text) {
   switch (type) {
     case 'centraal_beheer': return parseCentraalBeheer(text);
     case 'cb_beleggen':     return parseCBBeleggen(text);
+    case 'ing':             return parseIng(text);
     case 'raisin':          return parseRaisin(text);
     case 'abn_amro':        return parseAbnAmro(text);
     case 'evi':             return parseEviTekst(text);
@@ -377,7 +414,7 @@ function parseerPDFBasis(text) {
     case 'cb_beleggen_nieuw': return parseCBBeleggenNieuw(text);
     default:
       return { bank: 'Onbekend', jaar: null, rekeningen: [], type: 'onbekend',
-               fout: 'Bank niet herkend. Ondersteund: Centraal Beheer, Raisin, ABN AMRO, Evi, DEGIRO, Collin, Meewind.' };
+               fout: 'Bank niet herkend. Ondersteund: Centraal Beheer, ING, Raisin, ABN AMRO, Evi, DEGIRO, Collin, Meewind.' };
   }
 }
 

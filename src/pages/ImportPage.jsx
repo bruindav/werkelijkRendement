@@ -368,7 +368,7 @@ export default function ImportPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Jaaroverzichten importeren</h1>
-            <p className="text-sm text-slate-400">Upload meerdere PDF's tegelijk — Centraal Beheer, Raisin, DEGIRO, Evi, ABN AMRO, Meewind, Collin</p>
+            <p className="text-sm text-slate-400">Upload meerdere PDF's tegelijk — Centraal Beheer, ING, Raisin, DEGIRO, Evi, ABN AMRO, Meewind, Collin</p>
           </div>
         </div>
 
