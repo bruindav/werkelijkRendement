@@ -1,4 +1,4 @@
-// Versie: Fix132
+// Versie: Fix135
 // Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
@@ -365,6 +365,7 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
           ? normNr(r.rekeningnummer) === nr
           : norm(r.naam) === norm(naam)));
     if (dubbele) {
+      if (rek.houders && !dubbele.houders) await db.rekeningen.update(dubbele.id, { houders: rek.houders });
       // Eerder geïmporteerd zonder dividend/rente? Dan alsnog aanvullen.
       if (await vulInkomstenAan(dubbele, rek, norm)) bijgewerkt.push(naam || 'rekening');
       else overgeslagen.push(naam || 'rekening');
@@ -381,6 +382,7 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
       naam,
       type: rek.type,
       rekeningnummer: rek.rekeningnummer || rek.iban || '',
+      houders: rek.houders || '',
       kenmerk: rek.kenmerk || '',
       // Spaar/deposito velden direct op rekening
       jan1_saldo: rek.jan1_saldo || 0,

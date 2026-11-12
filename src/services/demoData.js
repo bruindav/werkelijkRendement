@@ -1,4 +1,4 @@
-// Versie: Fix126
+// Versie: Fix135
 // Realistische (fictieve) voorbeelddata voor de demo-modus.
 // Alle namen, rekeningnummers en bedragen zijn verzonnen.
 // 2024 en 2025: de 31-dec-waarden van 2024 zijn de 1-jan-waarden van 2025.
@@ -6,6 +6,7 @@
 import Dexie from 'dexie';
 import db, { genId, setProfiel } from './localDb';
 import { DB_NAAM_DEMO } from './modus';
+import { metaSleutel } from './rekeningMeta';
 
 // ---- helpers ----
 const pos = (o) => ({
@@ -129,6 +130,17 @@ export async function seedDemoData() {
   await setProfiel({ naam: 'Demo gebruiker' });
   await schrijfJaar(2024);
   await schrijfJaar(2025);
+  // Voorbeeld van eigenaar en doel per rekening
+  const m = (type, naam, rekeningnummer) => metaSleutel({ type, naam, rekeningnummer }, '');
+  await db.instellingen.put({
+    id: 'rekeningMeta', groepering: 'soort', houders: {},
+    rekeningen: {
+      [m('sparen', 'Oranje Spaarrekening', 'NL00 DEMO 0123 4567 89')]: { eigenaar: 'samen', doel: 'Buffer' },
+      [m('deposito', 'Termijndeposito 36 mnd', 'NL00 DEMO 0987 6543 21')]: { eigenaar: 'ik', doel: 'Verbouwing' },
+      [m('rekening-courant', 'Betaalrekening', 'NL00 DEMO 0555 1212 34')]: { eigenaar: 'samen', doel: '' },
+      [m('beleggen', 'Beleggingsrekening', 'DB-1000234')]: { eigenaar: 'ik', doel: 'Pensioen' },
+    },
+  });
 }
 
 // Demo terugzetten naar de beginstand

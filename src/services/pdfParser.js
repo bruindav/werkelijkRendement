@@ -1,4 +1,4 @@
-// Versie: Fix131
+// Versie: Fix135
 // PDF Parser - volledig client-side met pdf.js
 // Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO, Evi (Van Lanschot)
 // Fix101 - ABN AMRO parser herschreven voor nieuw PDF-formaat 2025
@@ -330,7 +330,34 @@ function parseEviTekst(text) {
 }
 
 // ============ HOOFD PARSE FUNCTIE ============
+// Fix135: rekeninghouder(s) uit het jaaroverzicht halen (voor eigenaar: ik / partner / samen)
+const NAAM = String.raw`(?:[A-Z]\.){1,5}\s?(?:(?:de|van|der|den|ten|ter|het|'t)\s)*[A-Z][A-Za-z'\-]+|[A-Z][a-z]+(?:\s[A-Z][a-z]+)*(?:\s(?:de|van|der|den|ten|ter|het))*\s[A-Z][A-Za-z'\-]+`;
+export function vindHouders(text) {
+  const t = String(text || '');
+  const lijst = t.match(new RegExp(String.raw`Rekeninghouder\(s\)\s+((?:${NAAM})(?:\s*[,&]\s*(?:${NAAM}))*)`));
+  if (lijst) return lijst[1].trim();
+  const opNaam = t.match(new RegExp(String.raw`Op naam van:\s*(?:de heer|mevrouw|mevr\.|dhr\.)?\s*(${NAAM})`, 'i'));
+  if (opNaam) return opNaam[1].trim();
+  const aanhef = t.match(new RegExp(String.raw`(?:Dhr\.|Mevr\.|Mw\.|De heer|Mevrouw)\s+(${NAAM})`));
+  if (aanhef) return aanhef[1].trim();
+  const naamVeld = t.match(new RegExp(String.raw`Naam:\s*(${NAAM})`));
+  if (naamVeld) return naamVeld[1].trim();
+  return '';
+}
+
 export function parseerPDF(text) {
+  const resultaat = parseerPDFBasis(text);
+  const houders = vindHouders(text);
+  if (houders && resultaat) {
+    const zet = (rs) => (rs || []).forEach(r => { r.houders = houders; });
+    zet(resultaat.rekeningen);
+    (resultaat.jaren || []).forEach(j => zet(j.rekeningen));
+    resultaat.houders = houders;
+  }
+  return resultaat;
+}
+
+function parseerPDFBasis(text) {
   const type = detectBankType(text);
   switch (type) {
     case 'centraal_beheer': return parseCentraalBeheer(text);

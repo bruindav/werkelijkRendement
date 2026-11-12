@@ -1,11 +1,12 @@
-// Versie: Fix134
+// Versie: Fix135
 // Rekeningenoverzicht: alle rekeningen gegroepeerd per soort, met saldo's en rente/dividend
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import db from '../services/localDb';
 import { formatEuro } from '../services/berekening';
 import Breadcrumb from '../components/Breadcrumb';
-import { Landmark, PiggyBank, Lock, TrendingUp, Wallet } from 'lucide-react';
+import { laadMeta, slaRekeningMetaOp, slaGroeperingOp, metaSleutel, bepaalEigenaar, EIGENAREN } from '../services/rekeningMeta';
+import { Landmark, PiggyBank, Lock, TrendingUp, Wallet, Target, Users, Pencil, Check, X } from 'lucide-react';
 
 const GROEPEN = [
   { type: 'rekening-courant', titel: 'Rekening courant', icon: Wallet },
@@ -62,15 +63,67 @@ function Cijfer({ label, children, sub }) {
   );
 }
 
-function RekeningKaart({ r, eindLabel, vw }) {
+function RekeningKaart({ r, eindLabel, vw, eigenaar, doel, doelen, onOpslaan }) {
+  const [bewerk, setBewerk] = useState(false);
+  const [keuze, setKeuze] = useState(eigenaar);
+  const [doelTekst, setDoelTekst] = useState(doel);
+  const eigenaarLabel = EIGENAREN.find(e => e.id === eigenaar)?.label;
+
+  const opslaan = async () => {
+    await onOpslaan(r, { eigenaar: keuze, doel: doelTekst });
+    setBewerk(false);
+  };
+
   return (
     <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-      <div className="mb-3">
-        <p className="text-white font-medium leading-tight">{r.naam}</p>
-        <p className="text-xs text-slate-500 mt-0.5">
-          {r.bankNaam}{r.rekeningnummer ? ` · ${r.rekeningnummer}` : ''}
-        </p>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-white font-medium leading-tight">{r.naam}</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {r.bankNaam}{r.rekeningnummer ? ` · ${r.rekeningnummer}` : ''}
+          </p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            <span className={`text-[11px] px-2 py-0.5 rounded-full ${eigenaarLabel ? 'bg-blue-500/15 text-blue-300' : 'bg-slate-800 text-slate-500'}`}>
+              {eigenaarLabel || 'Eigenaar?'}
+            </span>
+            {doel && <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300">🎯 {doel}</span>}
+          </div>
+        </div>
+        {!bewerk && (
+          <button onClick={() => { setKeuze(eigenaar); setDoelTekst(doel); setBewerk(true); }}
+            className="p-1.5 text-slate-500 hover:text-white" title="Eigenaar en doel wijzigen">
+            <Pencil className="w-4 h-4" />
+          </button>
+        )}
       </div>
+
+      {bewerk && (
+        <div className="mb-3 p-3 rounded-lg bg-slate-800/60 space-y-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">Van wie</p>
+            <div className="flex gap-2">
+              {EIGENAREN.map(e => (
+                <button key={e.id} onClick={() => setKeuze(e.id)}
+                  className={`flex-1 text-sm py-1.5 rounded-lg border ${keuze === e.id ? 'bg-blue-600 border-blue-500 text-white' : 'border-slate-700 text-slate-300'}`}>
+                  {e.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">Doel (optioneel)</p>
+            <input list="doelen-lijst" value={doelTekst} onChange={e => setDoelTekst(e.target.value)}
+              placeholder="bijv. Verbouwing, Pensioen, Buffer"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+            <datalist id="doelen-lijst">{doelen.map(d => <option key={d} value={d} />)}</datalist>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setBewerk(false)} className="px-3 py-1.5 text-sm text-slate-400 flex items-center gap-1"><X className="w-4 h-4" />Annuleer</button>
+            <button onClick={opslaan} className="px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center gap-1"><Check className="w-4 h-4" />Opslaan</button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         <Cijfer label="Saldo begin jaar">{formatEuro(r.begin)}</Cijfer>
         <Cijfer label={eindLabel}>{formatEuro(r.eind)}</Cijfer>
@@ -88,12 +141,13 @@ function RekeningKaart({ r, eindLabel, vw }) {
 export default function RekeningenPage() {
   const { selectedYear } = useApp();
   const [data, setData] = useState(null);
+  const [meta, setMeta] = useState(null);
 
   useEffect(() => {
     let actief = true;
     (async () => {
-      const [dit, vorig] = await Promise.all([laadJaar(selectedYear), laadJaar(Number(selectedYear) - 1)]);
-      if (actief) setData({ dit, vorig });
+      const [dit, vorig, m] = await Promise.all([laadJaar(selectedYear), laadJaar(Number(selectedYear) - 1), laadMeta()]);
+      if (actief) { setData({ dit, vorig }); setMeta(m); }
     })();
     return () => { actief = false; };
   }, [selectedYear]);
@@ -101,27 +155,73 @@ export default function RekeningenPage() {
   const huidigJaar = Number(selectedYear) === new Date().getFullYear();
   const eindLabel = huidigJaar ? 'Saldo actueel' : 'Saldo eind jaar';
 
-  if (!data) return <div className="h-40 bg-slate-800 rounded-2xl animate-pulse" />;
+  if (!data || !meta) return <div className="h-40 bg-slate-800 rounded-2xl animate-pulse" />;
 
-  const bekend = GROEPEN.map(g => g.type);
-  const groepen = [...GROEPEN, { type: '__overig', titel: 'Overig', icon: Landmark }]
-    .map(g => ({
-      ...g,
-      rekeningen: data.dit
-        .filter(r => g.type === '__overig' ? !bekend.includes(r.type) : r.type === g.type)
-        .sort((a, b) => (a.bankNaam + a.naam).localeCompare(b.bankNaam + b.naam, 'nl', { sensitivity: 'base' })),
-    }))
-    .filter(g => g.rekeningen.length > 0);
+  const metaVan = (r) => ({
+    eigenaar: bepaalEigenaar(r, meta, r.bankNaam),
+    doel: meta.rekeningen[metaSleutel(r, r.bankNaam)]?.doel || '',
+  });
+  const doelen = [...new Set(Object.values(meta.rekeningen).map(x => x.doel).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'nl', { sensitivity: 'base' }));
+
+  const opslaan = async (r, waarden) => {
+    await slaRekeningMetaOp(metaSleutel(r, r.bankNaam), waarden, r.houders);
+    setMeta(await laadMeta());
+  };
+  const kiesGroepering = async (g) => {
+    setMeta(m => ({ ...m, groepering: g }));
+    await slaGroeperingOp(g); // onthouden
+  };
+
+  const sorteer = (rs) => rs.sort((a, b) =>
+    (a.bankNaam + a.naam).localeCompare(b.bankNaam + b.naam, 'nl', { sensitivity: 'base' }));
+
+  // ---- groepen opbouwen volgens gekozen groepering ----
+  let groepen;
+  if (meta.groepering === 'doel') {
+    const namen = [...new Set(data.dit.map(r => metaVan(r).doel))]
+      .sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'nl', { sensitivity: 'base' })));
+    groepen = namen.map(n => ({
+      key: `doel-${n}`, titel: n || 'Geen doel', icon: Target,
+      rekeningen: sorteer(data.dit.filter(r => metaVan(r).doel === n)),
+    }));
+  } else if (meta.groepering === 'eigenaar') {
+    groepen = [...EIGENAREN.map(e => ({ id: e.id, titel: e.label })), { id: null, titel: 'Niet ingesteld' }]
+      .map(e => ({
+        key: `eig-${e.id}`, titel: e.titel, icon: Users,
+        rekeningen: sorteer(data.dit.filter(r => metaVan(r).eigenaar === e.id)),
+      }));
+  } else {
+    const bekend = GROEPEN.map(g => g.type);
+    groepen = [...GROEPEN, { type: '__overig', titel: 'Overig', icon: Landmark }].map(g => ({
+      key: g.type, titel: g.titel, icon: g.icon,
+      rekeningen: sorteer(data.dit.filter(r => g.type === '__overig' ? !bekend.includes(r.type) : r.type === g.type)),
+    }));
+  }
+  groepen = groepen.filter(g => g.rekeningen.length > 0);
 
   const metVerwacht = (rs) => rs.map(r => ({ r, vw: verwacht(r, data.vorig) }));
   const som = (rs, f) => rs.reduce((t, x) => t + f(x), 0);
   const alle = metVerwacht(data.dit);
+  const opties = [{ id: 'soort', label: 'Soort' }, { id: 'doel', label: 'Doel' }, { id: 'eigenaar', label: 'Eigenaar' }];
 
   return (
     <div>
       <Breadcrumb items={[{ label: 'Rekeningen' }]} />
       <h1 className="text-2xl font-bold text-white">Rekeningen</h1>
-      <p className="text-slate-400 mt-1 mb-6">Overzicht per soort rekening · {selectedYear}</p>
+      <p className="text-slate-400 mt-1 mb-4">Overzicht per rekening · {selectedYear}</p>
+
+      <div className="flex items-center gap-2 mb-6">
+        <span className="text-xs text-slate-500">Groeperen op</span>
+        <div className="flex bg-slate-800 rounded-xl p-1">
+          {opties.map(o => (
+            <button key={o.id} onClick={() => kiesGroepering(o.id)}
+              className={`px-3 py-1.5 text-sm rounded-lg ${meta.groepering === o.id ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {groepen.length === 0 ? (
         <div className="text-center py-16 bg-slate-800/30 border border-slate-700 rounded-2xl">
@@ -134,7 +234,7 @@ export default function RekeningenPage() {
             const items = metVerwacht(g.rekeningen);
             const Icon = g.icon;
             return (
-              <section key={g.type}>
+              <section key={g.key}>
                 <div className="flex items-center justify-between mb-3 gap-3">
                   <h2 className="flex items-center gap-2 text-white font-semibold">
                     <Icon className="w-4 h-4 text-blue-400" /> {g.titel}
@@ -145,7 +245,11 @@ export default function RekeningenPage() {
                   </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {items.map(({ r, vw }) => <RekeningKaart key={r.id} r={r} eindLabel={eindLabel} vw={vw} />)}
+                  {items.map(({ r, vw }) => {
+                    const m = metaVan(r);
+                    return <RekeningKaart key={r.id} r={r} eindLabel={eindLabel} vw={vw}
+                      eigenaar={m.eigenaar} doel={m.doel} doelen={doelen} onOpslaan={opslaan} />;
+                  })}
                 </div>
                 <div className="flex justify-end gap-4 text-xs mt-2 text-slate-400">
                   <span>Ontvangen: <span className="text-emerald-400">{formatEuro(som(g.rekeningen, r => r.ontvangen))}</span></span>
@@ -168,6 +272,7 @@ export default function RekeningenPage() {
           <p className="text-xs text-slate-500">
             Verwacht: spaar-, deposito- en betaalrekeningen = saldo × rentepercentage (alleen als dat percentage bekend is);
             beleggingsrekeningen = ontvangen dividend/rente van het vorige jaar. Het zijn schattingen, geen garanties.
+            Eigenaar en doel gelden voor alle jaren en worden onthouden.
           </p>
         </div>
       )}

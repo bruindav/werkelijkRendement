@@ -1,3 +1,4 @@
+// Versie: Fix135
 // Backup & Restore service
 // Exporteert alle lokale data als AES-256 encrypted bestand
 // Importeert en decrypteert backup bestanden
@@ -14,6 +15,7 @@ export async function exporteerBackup(wachtwoord) {
   // Verzamel alle data
   const profiel = await getProfiel() || {};
   const instellingen = await getInstellingen() || {};
+  const rekeningMeta = await db.instellingen.get('rekeningMeta') || null;
 
   // Alle banken over alle jaren
   const alleBanken = await db.banken.toArray();
@@ -43,6 +45,7 @@ export async function exporteerBackup(wachtwoord) {
     app: 'WerkelijkRendement',
     profiel: { naam: profiel.naam || 'Gebruiker' },
     instellingen,
+    rekeningMeta,
     jaren,
     banken: bankenMetData,
   };
@@ -139,6 +142,9 @@ export async function importeerBackup(bestandInhoud, wachtwoord, modus = 'samenv
   }
   if (backupData.instellingen) {
     await setInstellingen(backupData.instellingen);
+  }
+  if (backupData.rekeningMeta) {
+    await db.instellingen.put(backupData.rekeningMeta);
   }
 
   // Bij samenvoegen: maak ID-mapping zodat er geen conflicten zijn
