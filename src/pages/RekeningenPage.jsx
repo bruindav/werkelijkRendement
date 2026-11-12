@@ -226,7 +226,7 @@ export default function RekeningenPage() {
         {filterActief && (
           <button onClick={() => zetFilter({ eigenaar: 'alle', doel: 'alle' })}
             className="text-xs text-amber-300 hover:text-amber-200 flex items-center gap-1">
-            <X className="w-3.5 h-3.5" /> Filter wissen
+            <X className="w-3.5 h-3.5" /> Filter wissen{data.dit.length > zichtbaar.length ? ` (${data.dit.length - zichtbaar.length} rekening(en) verborgen)` : ''}
           </button>
         )}
       </div>
