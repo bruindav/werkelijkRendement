@@ -8,7 +8,7 @@ import { useBanken, getDashboardData } from '../hooks/useLocalDB';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatEuroGeheel, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
 import { getInstellingen } from '../services/localDb';
 import { laadMeta, laadHoudersMap, bepaalEigenaar, metaSleutel, EIGENAREN } from '../services/rekeningMeta';
-import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle, ChevronDown } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
 
@@ -282,6 +282,16 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, selectedYear, banken.length, banken.map(b => b.id).join(','), dashFilter, eigenaarInfo]);
 
+  const [dicht, setDicht] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('wr_dashdicht') || '{}'); } catch { return {}; }
+  });
+  const toggle = (k) => setDicht(prev => {
+    const n = { ...prev, [k]: !prev[k] };
+    try { localStorage.setItem('wr_dashdicht', JSON.stringify(n)); } catch { /* geen opslag */ }
+    return n;
+  });
+  const Chevron = ({ k }) => <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${dicht[k] ? '-rotate-90' : ''}`} />;
+
   const rendementPositief = totalen?.totaalRendement >= 0;
   const [mobieleKolom, setMobieleKolom] = useState('rendement'); // 'jan1' | 'dec31' | 'rendement'
 
@@ -293,27 +303,10 @@ export default function Dashboard() {
         <p className="text-slate-400 mt-1">Overzicht belastingjaar {selectedYear}{filterActief ? ' · gefilterd' : ''}</p>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3 mb-5">
-        {[
-          { sleutel: 'eigenaar', label: 'Eigenaar', opties: [['alle', 'Alle'], ...EIGENAREN.map(e => [e.id, e.label])] },
-          { sleutel: 'type', label: 'Type rekening', opties: [['alle', 'Alle'], ['rekening-courant', 'Rekening courant'], ['geldrekening', 'Geldrekening'], ['sparen', 'Spaarrekening'], ['deposito', 'Deposito'], ['beleggen', 'Beleggingsrekening']] },
-          { sleutel: 'doel', label: 'Doel', opties: [['alle', 'Alle'], ['__geen', 'Geen doel'], ...[...new Set(Object.values(eigenaarInfo.meta?.rekeningen || {}).map(x => x.doel).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nl', { sensitivity: 'base' })).map(x => [x, x])] },
-        ].map(f => (
-          <label key={f.sleutel} className="text-xs text-slate-400 flex flex-col gap-1">
-            {f.label}
-            <select value={dashFilter[f.sleutel]} onChange={e => zetDashFilter({ [f.sleutel]: e.target.value })}
-              className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-2 py-1.5">
-              {f.opties.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </label>
-        ))}
-        {filterActief && (
-          <button onClick={() => zetDashFilter({ eigenaar: 'alle', type: 'alle', doel: 'alle' })}
-            className="text-xs text-amber-300 hover:text-amber-200 pb-2">Filter wissen</button>
-        )}
-      </div>
-
+      <button onClick={() => toggle('stats')} className="flex items-center gap-2 mb-3 text-slate-300 text-sm font-semibold">
+        <Chevron k="stats" /> Samenvatting
+      </button>
+      {!dicht.stats && (<>
       {/* Stats — mobiel: compacte kaart, desktop: 4 blokken */}
       {loadingTotalen ? (
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
@@ -435,10 +428,15 @@ export default function Dashboard() {
         </div>
       )}
 
+      </>)}
+
       {/* Forfaitair vergelijk */}
       {totalen && (
         <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4 sm:p-6 mb-6 sm:mb-8">
-          <h2 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">Forfaitair vs Werkelijk</h2>
+          <button onClick={() => toggle('forfaitair')} className="flex items-center gap-2 text-base sm:text-lg font-semibold text-white w-full text-left">
+            <Chevron k="forfaitair" /> Forfaitair vs Werkelijk
+          </button>
+          {!dicht.forfaitair && (<div className="mt-3 sm:mt-4">
 
           {/* Mobiel: compacte tabel-stijl */}
           <div className="sm:hidden space-y-2">
@@ -560,18 +558,43 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+          </div>)}
         </div>
       )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3 mb-5">
+        {[
+          { sleutel: 'eigenaar', label: 'Eigenaar', opties: [['alle', 'Alle'], ...EIGENAREN.map(e => [e.id, e.label])] },
+          { sleutel: 'type', label: 'Type rekening', opties: [['alle', 'Alle'], ['rekening-courant', 'Rekening courant'], ['geldrekening', 'Geldrekening'], ['sparen', 'Spaarrekening'], ['deposito', 'Deposito'], ['beleggen', 'Beleggingsrekening']] },
+          { sleutel: 'doel', label: 'Doel', opties: [['alle', 'Alle'], ['__geen', 'Geen doel'], ...[...new Set(Object.values(eigenaarInfo.meta?.rekeningen || {}).map(x => x.doel).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'nl', { sensitivity: 'base' })).map(x => [x, x])] },
+        ].map(f => (
+          <label key={f.sleutel} className="text-xs text-slate-400 flex flex-col gap-1">
+            {f.label}
+            <select value={dashFilter[f.sleutel]} onChange={e => zetDashFilter({ [f.sleutel]: e.target.value })}
+              className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-2 py-1.5">
+              {f.opties.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+        ))}
+        {filterActief && (
+          <button onClick={() => zetDashFilter({ eigenaar: 'alle', type: 'alle', doel: 'alle' })}
+            className="text-xs text-amber-300 hover:text-amber-200 pb-2">Filter wissen</button>
+        )}
+      </div>
 
       {/* Banken specificatie */}
       <div className="bg-slate-800/40 border border-slate-700 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-slate-700">
-          <h2 className="text-lg font-semibold text-white">Specificatie per bank</h2>
+          <button onClick={() => toggle('banken')} className="flex items-center gap-2 text-lg font-semibold text-white text-left">
+            <Chevron k="banken" /> Specificatie per bank
+          </button>
           <Link to={`/jaar/${selectedYear}`} className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
             Beheer <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
 
+        {!dicht.banken && (<>
         {banken.length === 0 ? (
           <p className="text-slate-500 text-center py-8">Nog geen banken toegevoegd</p>
         ) : loadingTotalen ? (
@@ -703,6 +726,7 @@ export default function Dashboard() {
             ))}
           </div>
         )}
+        </>)}
       </div>
     </div>
   );
