@@ -1,4 +1,4 @@
-// Versie: Fix126
+// Versie: Fix148
 // AppContext — lokale versie zonder Firebase Auth
 // Gebruiker is altijd "ingelogd" — data staat lokaal op het apparaat
 // Fix126: demo-modus (aparte database) + startkeuze voor nieuwe gebruikers
@@ -23,7 +23,18 @@ export function AppProvider({ children }) {
     return na31Mei ? nu.getFullYear() : nu.getFullYear() - 1;
   };
 
-  const [selectedYear, setSelectedYear] = useState(bepaalStandaardJaar());
+  const jaarSleutel = isDemo() ? 'wr_jaar_demo' : 'wr_jaar';
+  const [selectedYear, setSelectedYearState] = useState(() => {
+    try {
+      const opgeslagen = parseInt(localStorage.getItem(jaarSleutel), 10);
+      if (opgeslagen >= 2000 && opgeslagen <= 2100) return opgeslagen;
+    } catch { /* geen opslag */ }
+    return bepaalStandaardJaar();
+  });
+  const setSelectedYear = (jaar) => {
+    setSelectedYearState(jaar);
+    try { localStorage.setItem(jaarSleutel, String(jaar)); } catch { /* geen opslag */ }
+  };
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
