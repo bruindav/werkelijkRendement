@@ -1,4 +1,4 @@
-// Versie: Fix129
+// Versie: Fix134
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import Layout from './components/Layout';
@@ -7,6 +7,7 @@ import JaarOverzicht from './pages/JaarOverzicht';
 import BankDetail from './pages/BankDetail';
 import PositieLijst from './pages/PositieLijst';
 import AangiftePage from './pages/AangiftePage';
+import RekeningenPage from './pages/RekeningenPage';
 import SpaarpaginaLijst from './pages/SpaarpaginaLijst';
 import ImportPage from './pages/ImportPage';
 import InstellingenPage from './pages/InstellingenPage';
@@ -49,6 +50,7 @@ function AppRoutes() {
       <Route path="/jaar/:year/bank/:bankId" element={<AuthGuard><BankDetail /></AuthGuard>} />
       <Route path="/jaar/:year/bank/:bankId/rekening/:accountId" element={<AuthGuard><PositieLijst /></AuthGuard>} />
       <Route path="/jaar/:year/bank/:bankId/rekening/:accountId/sparen" element={<AuthGuard><SpaarpaginaLijst /></AuthGuard>} />
+      <Route path="/rekeningen" element={<AuthGuard><RekeningenPage /></AuthGuard>} />
       <Route path="/aangifte/:year" element={<AuthGuardNoLayout><AangiftePage /></AuthGuardNoLayout>} />
       <Route path="/importeren" element={<AuthGuardNoLayout><ImportPage /></AuthGuardNoLayout>} />
       <Route path="/instellingen" element={<AuthGuardNoLayout><InstellingenPage /></AuthGuardNoLayout>} />
