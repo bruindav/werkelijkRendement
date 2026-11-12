@@ -1,11 +1,11 @@
-// Versie: Fix131
+// Versie: Fix139
 // Fix102 - Multi-file import — meerdere PDF bestanden tegelijk
 // Fix104 - Mobiele import fix: files direct opslaan voor async (Android Chrome fix)
 // Fix105 - Gratis limiet: max 1 PDF
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { importeerBank } from '../hooks/useLocalDB';
+import { importeerBank, telJaarData, verwijderJaarData, jaarWaarschuwing } from '../hooks/useLocalDB';
 import { parseerPDF, detectBankType } from '../services/pdfParser';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
@@ -165,6 +165,8 @@ export default function ImportPage() {
   const [importStatus, setImportStatus] = useState(null); // null | 'bezig' | 'klaar'
   const [importResultaat, setImportResultaat] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [vervang, setVervang] = useState(false);          // Fix139: bestaande data van het jaar eerst wissen
+  const [jaarTellingen, setJaarTellingen] = useState({}); // jaar -> { banken, rekeningen, posities }
 
   const defaultJaar = () => {
     const nu = new Date();
@@ -259,8 +261,45 @@ export default function ImportPage() {
     setBestanden(prev => prev.map(b => b.id === id ? { ...b, importJaar: jaar } : b));
   };
 
+  // Jaren waarin straks geïmporteerd wordt
+  const importJaren = () => {
+    const jaren = new Set();
+    for (const item of bestanden) {
+      if (item.status !== 'herkend' || !item.resultaat) continue;
+      if (item.resultaat.meerdere_jaren) {
+        item.resultaat.jaren.forEach((j, i) => { if (item.geselecteerd[i]) jaren.add(j.jaar); });
+      } else if (Object.values(item.geselecteerd || {}).some(Boolean)) {
+        jaren.add(item.importJaar);
+      }
+    }
+    return [...jaren].sort();
+  };
+  const jarenSleutel = importJaren().join(',');
+
+  useEffect(() => {
+    if (!vervang) return;
+    let actief = true;
+    (async () => {
+      const uit = {};
+      for (const j of importJaren()) uit[j] = await telJaarData(j);
+      if (actief) setJaarTellingen(uit);
+    })();
+    return () => { actief = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vervang, jarenSleutel]);
+
   // ============ IMPORTEER ALLES ============
   const doImport = async () => {
+    // Fix139: optioneel eerst alle bestaande data van deze jaren wissen (met waarschuwing)
+    if (vervang) {
+      const jaren = importJaren();
+      for (const j of jaren) {
+        const t = await telJaarData(j);
+        if (t.banken + t.rekeningen + t.posities === 0) continue;
+        if (!window.confirm(jaarWaarschuwing(j, t) + '\n\nDaarna worden de geselecteerde bestanden geïmporteerd.')) return;
+      }
+      for (const j of jaren) await verwijderJaarData(j);
+    }
     setImportStatus('bezig');
     let totaal = 0;
     const dubbel = [];
@@ -382,6 +421,19 @@ export default function ImportPage() {
               <p className="text-sm text-white">
                 {aantalGeselecteerd} rekening(en) uit {aantalKlaar} bestand(en) klaar om te importeren
               </p>
+              <label className="flex items-start gap-2 mt-2 text-xs text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={vervang} onChange={e => setVervang(e.target.checked)} className="mt-0.5" />
+                <span>Vervang bestaande gegevens: wis eerst alle banken en rekeningen van {importJaren().join(', ') || 'dit jaar'}</span>
+              </label>
+              {vervang && (
+                <p className="text-xs text-red-300 mt-1.5">
+                  ⚠️ Let op: dit wist definitief
+                  {Object.entries(jaarTellingen).map(([j, t]) =>
+                    ` ${t.banken} bank(en), ${t.rekeningen} rekening(en) en ${t.posities} positie(s) van ${j}`).join(' en')}
+                  {Object.keys(jaarTellingen).length === 0 ? ' alle gegevens van het gekozen jaar' : ''}
+                  . Je krijgt nog een bevestiging. Andere jaren blijven staan.
+                </p>
+              )}
             </div>
             <button
               onClick={doImport}

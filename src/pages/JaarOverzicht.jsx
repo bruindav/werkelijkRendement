@@ -1,9 +1,9 @@
-// Versie: Fix133
+// Versie: Fix139
 // JaarOverzicht met drag & drop volgorde
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useBanken } from '../hooks/useLocalDB';
+import { telJaarData, verwijderJaarData, jaarWaarschuwing, useBanken } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
 import { Building2, Plus, Trash2, ArrowRight, X, Check, Edit3, Lock } from 'lucide-react';
 
@@ -76,13 +76,22 @@ function BankRij({ bank, year, onUpdate, onVerwijder, dragHandleProps }) {
 export default function JaarOverzicht() {
   const { year } = useParams();
   const { user } = useApp();
-  const { banken, loading, voegBankToe, updateBank, verwijderBank, slaVolgorde } = useBanken(user?.uid, year);
+  const { banken, loading, voegBankToe, updateBank, verwijderBank, slaVolgorde, herlaad } = useBanken(user?.uid, year);
   const [toonForm, setToonForm] = useState(false);
 
   const handleVerwijder = async (bank) => {
     if (window.confirm(`Bank "${bank.naam}" verwijderen? Alle rekeningen en posities worden ook verwijderd.`)) {
       await verwijderBank(bank.id);
     }
+  };
+
+  // Fix139: heel jaar in één keer leegmaken (met waarschuwing)
+  const handleJaarLeeg = async () => {
+    const t = await telJaarData(year);
+    if (t.banken + t.rekeningen + t.posities === 0) return;
+    if (!window.confirm(jaarWaarschuwing(year, t))) return;
+    await verwijderJaarData(year);
+    await herlaad();
   };
 
   const handleVolgorde = async (nieuw) => {
@@ -98,6 +107,12 @@ export default function JaarOverzicht() {
           <p className="text-slate-400 mt-1">Belastingjaar {year}</p>
         </div>
         <div className="flex gap-2">
+          {banken.length > 0 && (
+            <button onClick={handleJaarLeeg} title={`Alle gegevens van ${year} verwijderen`}
+              className="flex items-center gap-2 bg-slate-800 hover:bg-red-900/40 text-red-300 rounded-xl px-3 py-2.5 text-sm">
+              <Trash2 className="w-4 h-4" /> Jaar leegmaken
+            </button>
+          )}
           <button onClick={() => setToonForm(true)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2.5 text-sm font-medium">
             <Plus className="w-4 h-4" /> Bank toevoegen

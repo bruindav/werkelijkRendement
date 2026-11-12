@@ -1,4 +1,4 @@
-// Versie: Fix138
+// Versie: Fix139
 // Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
@@ -7,6 +7,35 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import db, { genId, getBanken, getRekeningen, getPosities } from '../services/localDb';
+
+// ============ HEEL JAAR LEEGMAKEN (Fix139) ============
+// Telt wat er voor een jaar aan banken, rekeningen en posities staat
+export async function telJaarData(jaar) {
+  const y = String(jaar);
+  return {
+    banken: await db.banken.where('year').equals(y).count(),
+    rekeningen: await db.rekeningen.filter(r => String(r.year) === y).count(),
+    posities: await db.posities.filter(p => String(p.year) === y).count(),
+  };
+}
+
+// Verwijdert ALLE banken, rekeningen en posities van één jaar (andere jaren blijven staan).
+// Eigenaar/doel-keuzes (rekeningMeta) blijven bewaard, zodat die na opnieuw importeren weer gelden.
+export async function verwijderJaarData(jaar) {
+  const y = String(jaar);
+  await db.transaction('rw', db.banken, db.rekeningen, db.posities, async () => {
+    await db.posities.filter(p => String(p.year) === y).delete();
+    await db.rekeningen.filter(r => String(r.year) === y).delete();
+    await db.banken.where('year').equals(y).delete();
+  });
+}
+
+export function jaarWaarschuwing(jaar, t) {
+  return `Alle gegevens van ${jaar} verwijderen?\n\n` +
+    `${t.banken} bank(en), ${t.rekeningen} rekening(en) en ${t.posities} positie(s) worden definitief gewist.\n` +
+    `Dit kan niet ongedaan worden gemaakt (maak eventueel eerst een backup).\n\n` +
+    `Andere jaren blijven ongewijzigd.`;
+}
 
 // ============ BANKEN ============
 export function useBanken(_uid, year) {
@@ -55,7 +84,7 @@ export function useBanken(_uid, year) {
     await laad();
   };
 
-  return { banken, loading, voegBankToe, updateBank, verwijderBank, slaVolgorde };
+  return { banken, loading, voegBankToe, updateBank, verwijderBank, slaVolgorde, herlaad: laad };
 }
 
 // ============ REKENINGEN ============
