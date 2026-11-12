@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import db from '../services/localDb';
 import { formatEuro } from '../services/berekening';
 import Breadcrumb from '../components/Breadcrumb';
-import { laadMeta, slaRekeningMetaOp, slaFilterOp, metaSleutel, bepaalEigenaar, EIGENAREN } from '../services/rekeningMeta';
+import { laadHoudersMap, laadMeta, slaRekeningMetaOp, slaFilterOp, metaSleutel, bepaalEigenaar, EIGENAREN } from '../services/rekeningMeta';
 import { Landmark, PiggyBank, Lock, TrendingUp, Wallet, Banknote, Pencil, Check, X } from 'lucide-react';
 
 const GROEPEN = [
@@ -18,19 +18,6 @@ const GROEPEN = [
 
 const norm = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const normNr = (t) => String(t || '').replace(/\s+/g, '').toLowerCase();
-
-// Rekeninghouder(s) kunnen in een ander jaar bekend zijn (bijv. na kopiëren van een jaar):
-// zoek per rekening de houders in alle jaren.
-async function laadHoudersMap() {
-  const [banken, rekeningen] = await Promise.all([db.banken.toArray(), db.rekeningen.toArray()]);
-  const map = {};
-  for (const r of rekeningen) {
-    if (!r.houders) continue;
-    const bank = banken.find(b => b.id === r.bankId);
-    map[metaSleutel(r, bank?.naam || '')] = r.houders;
-  }
-  return map;
-}
 
 async function laadJaar(jaar) {
   const y = String(jaar);

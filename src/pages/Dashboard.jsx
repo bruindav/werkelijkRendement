@@ -7,6 +7,7 @@ import { useApp } from '../context/AppContext';
 import { useBanken, getDashboardData } from '../hooks/useLocalDB';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatEuroGeheel, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
 import { getInstellingen } from '../services/localDb';
+import { laadMeta, laadHoudersMap, bepaalEigenaar, metaSleutel, EIGENAREN } from '../services/rekeningMeta';
 import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
@@ -127,6 +128,18 @@ export default function Dashboard() {
   const [loadingTotalen, setLoadingTotalen] = useState(true);
   const [instellingen, setInstellingen] = useState(null);
   const instellingenRef = useRef(null);
+  const [eigenaarInfo, setEigenaarInfo] = useState({ meta: null, houders: {} });
+  useEffect(() => {
+    let actief = true;
+    Promise.all([laadMeta(), laadHoudersMap()]).then(([meta, houders]) => { if (actief) setEigenaarInfo({ meta, houders }); }).catch(() => {});
+    return () => { actief = false; };
+  }, [selectedYear]);
+  const eigenaarVan = (rek, bankNaam) => {
+    if (!eigenaarInfo.meta) return null;
+    const r = { ...rek, houders: rek.houders || eigenaarInfo.houders[metaSleutel(rek, bankNaam)] || '' };
+    const id = bepaalEigenaar(r, eigenaarInfo.meta, bankNaam);
+    return EIGENAREN.find(e => e.id === id)?.label || null;
+  };
 
   // Laad gebruikersinstellingen eenmalig (niet bij elke render opnieuw)
   useEffect(() => {
@@ -198,6 +211,9 @@ export default function Dashboard() {
             bankRekeningen.push({
               id: rek.id,
               naam: rek.naam,
+              rekeningnummer: rek.rekeningnummer,
+              kenmerk: rek.kenmerk,
+              houders: rek.houders,
               type: rek.type || 'beleggen',
               jan1: rekJan1,
               dec31: rekDec31,
@@ -580,6 +596,9 @@ export default function Dashboard() {
                     >
                       <span className="text-base flex-shrink-0">{typeEmoji}</span>
                       <span className="text-sm text-slate-400 flex-1 truncate">{rek.naam}</span>
+                      {(() => { const e = eigenaarVan(rek, bank.naam); return (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${e ? 'bg-blue-500/15 text-blue-300' : 'bg-slate-800 text-slate-600'}`}>{e || '?'}</span>
+                      ); })()}
                       {/* Mobiel */}
                       <div className="sm:hidden text-xs">
                         {mobieleKolom === 'jan1' && <span className="text-slate-500">{formatEuro(rek.jan1)}</span>}
