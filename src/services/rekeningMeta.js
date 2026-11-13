@@ -1,4 +1,4 @@
-// Versie: Fix141
+// Versie: Fix154
 // Eigenaar (ik / partner / samen) en doel per rekening — blijft bewaard over jaren heen.
 // Opgeslagen in de instellingen-tabel onder id 'rekeningMeta' (zit dus ook in de lokale database).
 // Sleutel per rekening = soort + rekeningnummer (of bank + naam als er geen nummer is),
@@ -48,7 +48,39 @@ export async function laadMeta() {
     rekeningen: doc?.rekeningen || {},   // sleutel -> { eigenaar, doel }
     houders: doc?.houders || {},         // persoonsleutel (initiaal + achternaam) -> eigenaar (geleerd)
     filter: doc?.filter || { eigenaar: 'alle', doel: 'alle' },   // laatst gekozen filter
+    handmatig: doc?.handmatig || {},     // sleutelHandmatig -> handmatig ingevulde velden (blijven bestaan na jaar leegmaken)
   };
+}
+
+// ---- Handmatig ingevulde velden per rekening (los van het jaar bewaard) ----
+// Sleutel zonder type, zodat een handmatig gewijzigd type de koppeling niet breekt.
+const HANDMATIG_VELDEN = ['type', 'deposito_startdatum', 'deposito_einddatum', 'startbedrag', 'uitbetaling_type', 'rente_pct', 'kosten', 'notitie', 'looptijd_maanden'];
+
+export function sleutelHandmatig(rek, bankNaam) {
+  if (rek.kenmerk) return `kenmerk:${normNr(rek.kenmerk)}`;
+  const nr = normNr(rek.rekeningnummer);
+  return nr ? `nr:${nr}` : `${norm(bankNaam)}|${norm(rek.naam)}`;
+}
+
+export async function slaHandmatigOp(rek, bankNaam) {
+  const meta = await laadMeta();
+  const rec = {};
+  for (const k of HANDMATIG_VELDEN) if (rek[k] !== undefined && rek[k] !== null && rek[k] !== '') rec[k] = rek[k];
+  meta.handmatig[sleutelHandmatig(rek, bankNaam)] = rec;
+  await bewaar(meta);
+}
+
+export async function haalHandmatig(rek, bankNaam) {
+  const meta = await laadMeta();
+  return meta.handmatig[sleutelHandmatig(rek, bankNaam)] || null;
+}
+
+// Alles wat bewaard is over één rekening wissen (eigenaar, doel, handmatige velden)
+export async function wisBewaardeGegevens(rek, bankNaam) {
+  const meta = await laadMeta();
+  delete meta.handmatig[sleutelHandmatig(rek, bankNaam)];
+  delete meta.rekeningen[metaSleutel(rek, bankNaam)];
+  await bewaar(meta);
 }
 
 async function bewaar(meta) {

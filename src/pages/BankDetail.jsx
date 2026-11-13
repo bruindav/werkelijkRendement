@@ -4,6 +4,7 @@
 // Fix106 - Rekening-courant type toegevoegd
 // Fix105 - Gratis limiet: max 2 rekeningen per bank
 // Fix 20 - Spaar/deposito inline in BankDetail, geen apart niveau
+import { wisBewaardeGegevens } from '../services/rekeningMeta';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -524,6 +525,9 @@ export default function BankDetail() {
 
   const handleVerwijder = async (rek) => {
     if (window.confirm(`Rekening "${rek.naam}" verwijderen? Alle data wordt ook verwijderd.`)) {
+      if (window.confirm('Ook de bewaarde gegevens van deze rekening wissen (eigenaar, doel, einddatum, rente-keuze, notitie)?\n\nOK = alles wissen\nAnnuleren = bewaren, handig als je dit jaar opnieuw importeert')) {
+        await wisBewaardeGegevens(rek, bank?.naam);
+      }
       await verwijderRekening(rek.id);
     }
   };

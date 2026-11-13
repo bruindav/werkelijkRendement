@@ -5,6 +5,7 @@
 // Dezelfde API als useFirestore zodat alle pagina's ongewijzigd blijven
 // Data staat in IndexedDB (lokaal in de browser)
 
+import { slaHandmatigOp, haalHandmatig } from '../services/rekeningMeta';
 import { useState, useEffect, useCallback } from 'react';
 import db, { genId, getBanken, getRekeningen, getPosities } from '../services/localDb';
 
@@ -34,6 +35,7 @@ export function jaarWaarschuwing(jaar, t) {
   return `Alle gegevens van ${jaar} verwijderen?\n\n` +
     `${t.banken} bank(en), ${t.rekeningen} rekening(en) en ${t.posities} positie(s) worden definitief gewist.\n` +
     `Dit kan niet ongedaan worden gemaakt (maak eventueel eerst een backup).\n\n` +
+    `Eigenaar, doel en handmatig ingevulde gegevens (einddatum, rente-keuze, notitie, kosten) blijven bewaard en worden bij opnieuw importeren teruggezet.\n` +
     `Andere jaren blijven ongewijzigd.`;
 }
 
@@ -88,6 +90,15 @@ export function useBanken(_uid, year) {
 }
 
 // ============ REKENINGEN ============
+// Handmatig ingevulde velden apart bewaren, zodat ze een jaar leegmaken + her-import overleven
+async function bewaarHandmatig(rekId) {
+  try {
+    const rek = await db.rekeningen.get(rekId);
+    const bank = rek && await db.banken.get(rek.bankId);
+    if (rek && bank) await slaHandmatigOp(rek, bank.naam);
+  } catch { /* bewaren is best-effort */ }
+}
+
 export function useRekeningen(_uid, year, bankId) {
   const [rekeningen, setRekeningen] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -107,12 +118,14 @@ export function useRekeningen(_uid, year, bankId) {
     const id = genId();
     const count = await db.rekeningen.filter(r => r.bankId === bankId && r.year === String(year)).count();
     await db.rekeningen.add({ id, year: String(year), bankId, volgorde: count, ...data });
+    await bewaarHandmatig(id);
     await laad();
     return { id };
   };
 
   const updateRekening = async (id, data) => {
     await db.rekeningen.update(id, data);
+    await bewaarHandmatig(id);
     await laad();
   };
 
@@ -414,7 +427,17 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
     if (dubbele) {
       if (rek.houders && !dubbele.houders) await db.rekeningen.update(dubbele.id, { houders: rek.houders });
       // Eerder geïmporteerd zonder dividend/rente? Dan alsnog aanvullen.
-      if (await vulInkomstenAan(dubbele, rek, norm)) bijgewerkt.push(naam || 'rekening');
+      // Herkende spaar-/depositorekening: bedragen uit het overzicht bijwerken, handmatige velden blijven staan
+      let bedragenGewijzigd = false;
+      if (SALDO_TYPES.includes(dubbele.type) && SALDO_TYPES.includes(rek.type)) {
+        const upd = {};
+        for (const k of ['jan1_saldo', 'dec31_saldo', 'ontvangen_rente']) {
+          const nieuw = rek[k] || 0;
+          if (nieuw && Math.abs((dubbele[k] || 0) - nieuw) >= 0.005) upd[k] = nieuw;
+        }
+        if (Object.keys(upd).length) { await db.rekeningen.update(dubbele.id, upd); Object.assign(dubbele, upd); bedragenGewijzigd = true; }
+      }
+      if ((await vulInkomstenAan(dubbele, rek, norm)) || bedragenGewijzigd) bijgewerkt.push(naam || 'rekening');
       else overgeslagen.push(naam || 'rekening');
       continue;
     }
@@ -441,6 +464,13 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
       ...(rek.looptijd_maanden ? { looptijd_maanden: rek.looptijd_maanden } : {}),
       ...(rek.land ? { land: rek.land } : {}),
     };
+    const bewaard = await haalHandmatig(nieuweRek, bankData.naam);
+    if (bewaard) {
+      const { type: bewaardType, ...rest } = bewaard;
+      Object.assign(nieuweRek, rest);
+      const SALDO = ['sparen', 'deposito', 'rekening-courant', 'geldrekening'];
+      if (bewaardType && SALDO.includes(bewaardType) && SALDO.includes(nieuweRek.type)) nieuweRek.type = bewaardType;
+    }
     await db.rekeningen.add(nieuweRek);
     bestaandeRek.push(nieuweRek);
     toegevoegd.push(naam || 'rekening');
