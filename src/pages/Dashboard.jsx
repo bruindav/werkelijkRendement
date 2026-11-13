@@ -127,6 +127,7 @@ export default function Dashboard() {
   const { banken } = useBanken(user?.uid, selectedYear);
   const [totalen, setTotalen] = useState(null);
   const [loadingTotalen, setLoadingTotalen] = useState(true);
+  const heeftTotalen = useRef(false);
   const [instellingen, setInstellingen] = useState(null);
   const instellingenRef = useRef(null);
   const [eigenaarInfo, setEigenaarInfo] = useState({ meta: null, houders: {} });
@@ -200,7 +201,8 @@ export default function Dashboard() {
     }
 
     async function laadTotalen() {
-      setLoadingTotalen(true);
+      // Alleen de eerste keer een laadscherm tonen; bij herberekenen (filter, doel kiezen) blijft de pagina staan
+      if (!heeftTotalen.current) setLoadingTotalen(true);
       let totaalRendement = 0;
       let totaalVermogenJan1 = 0;
       let totaalVermogenDec31 = 0;
@@ -299,6 +301,7 @@ export default function Dashboard() {
         totaalSparenJan1, totaalSparenDec31, totaalBeleggenJan1, totaalBeleggenDec31,
         totaalRendementSparen, totaalRendementBeleggen,
         bankDetails: bankDetails.sort((a, b) => String(a.naam || '').localeCompare(String(b.naam || ''), 'nl', { sensitivity: 'base' })) });
+      heeftTotalen.current = true;
       setLoadingTotalen(false);
     }
 
