@@ -183,7 +183,13 @@ export function formatEuroGeheel(bedrag) {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Math.round(bedrag));
 }
 
+// Overzichten: hele euro's (geen centen)
 export function formatEuro(amount) {
+  return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Math.round(amount || 0));
+}
+
+// Detailschermen en aangifte: met centen
+export function formatEuroExact(amount) {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(amount || 0);
 }
 

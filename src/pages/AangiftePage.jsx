@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { getAangifteData } from '../hooks/useLocalDB';
 import { getInstellingen } from '../services/localDb';
-import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatEuroGeheel, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
+import { berekenPositieRendement, vergelijkMethoden, formatEuroExact as formatEuro, formatEuroGeheel, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
 import { FileText, Printer, CheckCircle, AlertCircle, Copy, Check } from 'lucide-react';

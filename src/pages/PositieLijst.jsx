@@ -8,7 +8,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { usePosities, useBank, useRekening } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
-import { berekenPositieRendement, formatEuro, formatPct } from '../services/berekening';
+import { berekenPositieRendement, formatEuroExact as formatEuro, formatPct } from '../services/berekening';
 import { zoekAandeel, haalKoersenVoorJaar, haalHistorischeKoers } from '../services/koersApi';
 import { Plus, Trash2, ChevronDown, ChevronUp, Search, TrendingUp, Edit3, Check, X, Loader, Calendar, Repeat, Info } from 'lucide-react';
 

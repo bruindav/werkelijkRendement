@@ -13,6 +13,7 @@ import { CreditCard, TrendingUp, PiggyBank, Lock, Plus, Trash2, ArrowRight,
          X, Check, Edit3, ChevronDown, ChevronUp, Calculator, Percent } from 'lucide-react';
 import DragLijst, { DragHandle } from '../components/DragLijst';
 
+const fmtGeheel = (v) => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Math.round(v || 0));
 const fmt = (v) => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(v || 0);
 
 const REKENING_TYPES = [
@@ -429,10 +430,10 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
             {heeftData ? (
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-xs">
                 {rek.jan1_saldo > 0 && (
-                  <span className="text-slate-400">1 jan: <span className="text-white">{fmt(rek.jan1_saldo)}</span></span>
+                  <span className="text-slate-400">1 jan: <span className="text-white">{fmtGeheel(rek.jan1_saldo)}</span></span>
                 )}
                 {rek.dec31_saldo > 0 && (
-                  <span className="text-slate-400">31 dec: <span className="text-white">{fmt(rek.dec31_saldo)}</span></span>
+                  <span className="text-slate-400">31 dec: <span className="text-white">{fmtGeheel(rek.dec31_saldo)}</span></span>
                 )}
                 {rek.rente_pct > 0 && (
                   <span className="text-blue-400 flex items-center gap-0.5">
@@ -440,7 +441,7 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
                   </span>
                 )}
                 {rek.ontvangen_rente > 0 && (
-                  <span className="text-emerald-400">rente: {fmt(rek.ontvangen_rente)}</span>
+                  <span className="text-emerald-400">rente: {fmtGeheel(rek.ontvangen_rente)}</span>
                 )}
                 {dagenTotEinde !== null && dagenTotEinde > 0 && (
                   <span className="text-amber-400">{dagenTotEinde}d tot einde</span>
