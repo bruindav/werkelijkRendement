@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken, getDashboardData } from '../hooks/useLocalDB';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatEuroGeheel, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
-import { eindeSaldo, depositoStatus, looptijdOntbreekt } from '../services/depositoEinde';
+import { eindeSaldo, depositoStatus, looptijdOntbreekt, inmiddelsVerlopen } from '../services/depositoEinde';
 import { getInstellingen } from '../services/localDb';
 import { laadMeta, laadHoudersMap, bepaalEigenaar, metaSleutel, slaRekeningMetaOp, EIGENAREN } from '../services/rekeningMeta';
 import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle, ChevronDown } from 'lucide-react';
@@ -259,7 +259,7 @@ export default function Dashboard() {
               einde: ein.bedrag,
               eindeOnbekend: ein.onbekend,
               geenLooptijd: looptijdOntbreekt(rek),
-              verlopen: dStatus?.status === 'verlopen' ? dStatus.datum : '',
+              verlopen: dStatus?.status === 'verlopen' ? dStatus.datum : inmiddelsVerlopen(rek),
               id: rek.id,
               naam: rek.naam,
               rekeningnummer: rek.rekeningnummer,

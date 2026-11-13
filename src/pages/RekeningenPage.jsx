@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import db from '../services/localDb';
-import { depositoStatus, looptijdOntbreekt } from '../services/depositoEinde';
+import { depositoStatus, looptijdOntbreekt, inmiddelsVerlopen } from '../services/depositoEinde';
 import { formatEuro } from '../services/berekening';
 import Breadcrumb from '../components/Breadcrumb';
 import { laadHoudersMap, laadMeta, slaRekeningMetaOp, slaFilterOp, metaSleutel, bepaalEigenaar, EIGENAREN } from '../services/rekeningMeta';
@@ -34,7 +34,7 @@ async function laadJaar(jaar) {
     const dStatus = depositoStatus(r, jaar, peil);
     return {
       ...r,
-      verlopen: dStatus?.status === 'verlopen' ? dStatus.datum : '',
+      verlopen: dStatus?.status === 'verlopen' ? dStatus.datum : inmiddelsVerlopen(r),
       bankNaam: bank?.naam || '',
       sleutelBron: bank?.naam || '',
       begin: isBel ? pos.reduce((t, p) => t + (p.jan1_waarde || 0), 0) : (r.jan1_saldo || 0),
