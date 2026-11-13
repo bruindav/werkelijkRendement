@@ -689,13 +689,14 @@ export default function Dashboard() {
                       ); })()}
                       <span className="text-sm text-slate-200 flex-1 leading-tight break-words">{rek.naam}
                         {rek.verlopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300 whitespace-nowrap">Verlopen {rek.verlopen}</span>}
+                        {rek.geenLooptijd && <span title="Importeer de Raisin-productsheet of vul start-/einddatum in" className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-300 whitespace-nowrap">Looptijd onbekend</span>}
                       </span>
                       {/* Mobiel */}
                       <div className="sm:hidden text-xs">
                         {mobieleKolom === 'jan1' && <span className="text-slate-200">{formatEuro(rek.jan1)}</span>}
                         {mobieleKolom === 'dec31' && <span className="text-slate-200">{formatEuro(rek.dec31)}</span>}
                         {mobieleKolom === 'einde' && <span className={rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-200'} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>}
-                        {mobieleKolom === 'kenmerk' && <span className={`text-xs font-mono ${rek.geenLooptijd ? 'text-orange-400' : 'text-slate-300'}`}>{rek.kenmerk || '–'}</span>}
+                        {mobieleKolom === 'kenmerk' && <span className="text-xs font-mono text-slate-300">{rek.kenmerk || '–'}</span>}
                         {mobieleKolom === 'rendement' && <span className={rek.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}</span>}
                       </div>
                       <div className="hidden sm:flex items-center gap-6 text-xs shrink-0">
@@ -705,7 +706,7 @@ export default function Dashboard() {
                         <span className={`w-[100px] shrink-0 text-right ${rek.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}
                         </span>
-                        <span className={`w-[150px] shrink-0 text-right text-xs font-mono truncate ${rek.geenLooptijd ? 'text-orange-400' : 'text-slate-300'}`} title={rek.geenLooptijd ? 'Looptijd (start/einddatum) onbekend – importeer de productsheet of vul de datums in' : (rek.kenmerk || '')}>{rek.kenmerk || (rek.geenLooptijd ? '–' : '')}</span>
+                        <span className={`w-[150px] shrink-0 text-right text-xs font-mono truncate text-slate-300`} title={rek.kenmerk || ''}>{rek.kenmerk || ''}</span>
                       </div>
                       <div className="w-[18px] flex-shrink-0" />
                     </Link>
