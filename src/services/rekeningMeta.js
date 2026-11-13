@@ -54,7 +54,7 @@ export async function laadMeta() {
 
 // ---- Handmatig ingevulde velden per rekening (los van het jaar bewaard) ----
 // Sleutel zonder type, zodat een handmatig gewijzigd type de koppeling niet breekt.
-const HANDMATIG_VELDEN = ['type', 'deposito_startdatum', 'deposito_einddatum', 'startbedrag', 'uitbetaling_type', 'rente_pct', 'kosten', 'notitie', 'looptijd_maanden'];
+const HANDMATIG_VELDEN = ['type', 'deposito_startdatum', 'deposito_einddatum', 'startbedrag', 'uitbetaling_type', 'rente_pct', 'kosten', 'notitie', 'looptijd_maanden', 'partnerbank'];
 
 export function sleutelHandmatig(rek, bankNaam) {
   if (rek.kenmerk) return `kenmerk:${normNr(rek.kenmerk)}`;
@@ -125,3 +125,20 @@ export async function laadHoudersMap() {
   return map;
 }
 
+
+
+// Productsheet (Raisin): gegevens bewaren onder het FDA-kenmerk en toepassen op alle bestaande
+// rekeningen met dat kenmerk. Rekeningen die later worden geïmporteerd krijgen ze automatisch.
+export async function pasProductsheetToe(sheet) {
+  const velden = {};
+  for (const k of ['startbedrag', 'looptijd_maanden', 'rente_pct', 'deposito_startdatum', 'deposito_einddatum', 'partnerbank']) {
+    if (sheet[k]) velden[k] = sheet[k];
+  }
+  const sleutel = `kenmerk:${normNr(sheet.kenmerk)}`;
+  const meta = await laadMeta();
+  meta.handmatig[sleutel] = { ...(meta.handmatig[sleutel] || {}), ...velden };
+  await bewaar(meta);
+  const bestaand = await db.rekeningen.filter(r => r.kenmerk && normNr(r.kenmerk) === normNr(sheet.kenmerk)).toArray();
+  for (const r of bestaand) await db.rekeningen.update(r.id, velden);
+  return bestaand.length;
+}

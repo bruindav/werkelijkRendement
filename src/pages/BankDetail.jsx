@@ -130,6 +130,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
     kosten:              rek.kosten || '',
     notitie:             rek.notitie || '',
     kenmerk:             rek.kenmerk || '',
+    partnerbank:         rek.partnerbank || '',
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -288,6 +289,12 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
             className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <div>
+          <label className="block text-xs text-slate-400 mb-1">Partnerbank <span className="text-slate-500">(bijv. Renault Bank)</span></label>
+          <input value={form.partnerbank} onChange={e => set('partnerbank', e.target.value)}
+            placeholder="bank achter het Raisin-product"
+            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
           <label className="block text-xs text-slate-400 mb-1">Notitie</label>
           <input value={form.notitie} onChange={e => set('notitie', e.target.value)}
             placeholder="bijv. automatisch verlengd, garantiebank..."
@@ -308,6 +315,7 @@ function SpaarDepositoForm({ rek, year, onSave, onCancel }) {
           kosten:              parseFloat(form.kosten) || 0,
           notitie:             form.notitie || '',
           kenmerk:             form.kenmerk || '',
+          partnerbank:         form.partnerbank || '',
         })}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2 text-sm font-medium">
           <Check className="w-4 h-4" /> Opslaan
@@ -449,6 +457,9 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
                 )}
                 {dagenTotEinde !== null && dagenTotEinde <= 0 && (
                   <span className="text-red-400">Verlopen</span>
+                )}
+                {rek.partnerbank && (
+                  <span className="text-slate-300">🏦 {rek.partnerbank}</span>
                 )}
                 {rek.kenmerk && (
                   <span className="text-slate-500 font-mono text-xs">[{rek.kenmerk}]</span>

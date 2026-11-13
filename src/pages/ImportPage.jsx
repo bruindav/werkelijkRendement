@@ -5,6 +5,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
+import { pasProductsheetToe } from '../services/rekeningMeta';
 import { importeerBank, telJaarData, verwijderJaarData, jaarWaarschuwing } from '../hooks/useLocalDB';
 import { parseerPDF, detectBankType } from '../services/pdfParser';
 import Layout from '../components/Layout';
@@ -111,7 +112,7 @@ function BestandKaart({ item, onVerwijder, onToggleRekening, onJaarChange }) {
       {status === 'herkend' && resultaat && (
         <div className="border-t border-slate-700 px-4 pb-4 pt-3 space-y-3">
           {/* Jaar */}
-          {!resultaat.meerdere_jaren && (
+          {!resultaat.meerdere_jaren && resultaat.type !== 'raisin_productsheet' && (
             <div className="flex items-center gap-2">
               <label className="text-xs text-slate-400 whitespace-nowrap">Importeer als jaar:</label>
               <select value={importJaar} onChange={e => onJaarChange(parseInt(e.target.value))}
@@ -304,6 +305,7 @@ export default function ImportPage() {
     let totaal = 0;
     const dubbel = [];
     const bijgewerkt = [];
+    const sheets = [];
     const tel = (r) => { totaal += r.toegevoegd.length; dubbel.push(...r.overgeslagen); bijgewerkt.push(...(r.bijgewerkt || [])); return r; };
 
     for (const item of bestanden) {
@@ -316,6 +318,10 @@ export default function ImportPage() {
           for (const { jaar, rekening } of geselecteerdeJaren) {
             tel(await importeerBank(jaar, { naam: resultaat.bank }, [rekening]));
           }
+        } else if (resultaat.type === 'raisin_productsheet') {
+          const sh = resultaat.productsheet;
+          const n = await pasProductsheetToe(sh);
+          sheets.push(`${sh.partnerbank || 'Raisin'} ${sh.looptijd_maanden} mnd ${sh.rente_pct}%${n ? '' : ' (wordt toegepast zodra het jaaroverzicht is geïmporteerd)'}`);
         } else if (resultaat.type === 'raisin') {
           const groepen = {};
           resultaat.rekeningen.forEach((rec, i) => {
@@ -342,7 +348,7 @@ export default function ImportPage() {
       }
     }
 
-    setImportResultaat({ totaal, dubbel, bijgewerkt });
+    setImportResultaat({ totaal, dubbel, bijgewerkt, sheets });
     setImportStatus('klaar');
   };
 
@@ -457,6 +463,9 @@ export default function ImportPage() {
             <p className="text-sm text-emerald-300/80 mb-4">
               {importResultaat.totaal} rekening(en) geïmporteerd.
             </p>
+            {importResultaat.sheets?.length > 0 && (
+              <p className="text-sm text-emerald-400 mt-2">✓ Productsheet(s) verwerkt (start-/einddatum, inleg, rente, partnerbank): {importResultaat.sheets.join('; ')}.</p>
+            )}
             {importResultaat.bijgewerkt?.length > 0 && (
               <p className="text-sm text-emerald-300/80 mb-4">
                 ✓ Dividend/rente aangevuld bij bestaande rekening(en): {importResultaat.bijgewerkt.join(', ')}.

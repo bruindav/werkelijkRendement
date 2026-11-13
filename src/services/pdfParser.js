@@ -31,6 +31,7 @@ export function detectBankType(text) {
     return 'centraal_beheer';
   }
   if (/ING Bank N\.V\./.test(text) && /ING (Betaalrekening|Oranje Spaarrekening|Spaarrekening|Deposito|Bonus)/i.test(text)) return 'ing';
+  if (/Bevestiging termijndeposito/i.test(text) && /FDA_\d/.test(text)) return 'raisin_productsheet';
   if (text.toLowerCase().includes('raisin')) return 'raisin';
   if (text.includes('ABN AMRO')) return 'abn_amro';
   return 'onbekend';
@@ -139,6 +140,33 @@ function parseRaisin(text) {
   }
 
   return { bank: 'Raisin', jaar, rekeningen, bankGroepen, type: 'raisin' };
+}
+
+// ============ RAISIN PRODUCTSHEET (Bevestiging termijndeposito) ============
+// Bevat per deposito: partnerbank, FDA-kenmerk, inleg, looptijd, rente, ingangs- en vervaldatum.
+// Wordt niet als nieuwe rekening geïmporteerd maar aan het deposito met hetzelfde kenmerk gekoppeld.
+function parseRaisinProductsheet(text) {
+  const iso = (d) => { const m = d && d.match(/(\d{2})\.(\d{2})\.(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+  const kenmerk = (text.match(/FDA_[\d_]+/) || [''])[0];
+  const partnerbank = ((text.match(/^\s*([^\n]*?)\s+BAC_[\d_]+/m) || [])[1] || '').trim();
+  const inleg = text.match(/Inlegbedrag in EUR[\s\S]{0,40}?(\d[\d.]*(?:,\d+)?)/);
+  const looptijd = text.match(/Looptijd in maanden[\s\S]{0,40}?(\d+)/);
+  const rente = text.match(/Bruto rentetarief op jaarbasis[\s\S]{0,40}?(\d+(?:[.,]\d+)?)\s*%/);
+  const start = text.match(/Ingangsdatum[\s\S]{0,40}?(\d{2}\.\d{2}\.\d{4})/);
+  const eind = text.match(/Vervaldatum[\s\S]{0,40}?(\d{2}\.\d{2}\.\d{4})/);
+  if (!kenmerk) return { type: 'onbekend', fout: 'Geen FDA-kenmerk gevonden in productsheet' };
+  const sheet = {
+    kenmerk, partnerbank,
+    startbedrag: inleg ? parseBedrag(inleg[1]) : 0,
+    looptijd_maanden: looptijd ? parseInt(looptijd[1], 10) : 0,
+    rente_pct: rente ? parseFloat(rente[1].replace(',', '.')) : 0,
+    deposito_startdatum: iso(start && start[1]),
+    deposito_einddatum: iso(eind && eind[1]),
+  };
+  return {
+    bank: 'Raisin', type: 'raisin_productsheet', productsheet: sheet,
+    rekeningen: [{ naam: `Productsheet ${partnerbank || ''} ${sheet.looptijd_maanden} mnd ${sheet.rente_pct}% (${kenmerk})`.replace(/\s+/g, ' '), type: 'deposito' }],
+  };
 }
 
 // ============ ING ============
@@ -405,6 +433,7 @@ function parseerPDFBasis(text) {
     case 'centraal_beheer': return parseCentraalBeheer(text);
     case 'cb_beleggen':     return parseCBBeleggen(text);
     case 'ing':             return parseIng(text);
+    case 'raisin_productsheet': return parseRaisinProductsheet(text);
     case 'raisin':          return parseRaisin(text);
     case 'abn_amro':        return parseAbnAmro(text);
     case 'evi':             return parseEviTekst(text);
