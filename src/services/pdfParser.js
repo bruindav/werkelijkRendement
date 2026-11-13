@@ -31,7 +31,7 @@ export function detectBankType(text) {
     return 'centraal_beheer';
   }
   if (/ING Bank N\.V\./.test(text) && /ING (Betaalrekening|Oranje Spaarrekening|Spaarrekening|Deposito|Bonus)/i.test(text)) return 'ing';
-  if (/Bevestiging termijndeposito/i.test(text) && /FDA_\d/.test(text)) return 'raisin_productsheet';
+  if (/Bevestiging\s+(t\s*e\s*r\s*m\s*i\s*j\s*n\s*)?d\s*e\s*p\s*o\s*s\s*i\s*t\s*o/i.test(text) && /FDA_\d/.test(text)) return 'raisin_productsheet';
   if (text.toLowerCase().includes('raisin')) return 'raisin';
   if (text.includes('ABN AMRO')) return 'abn_amro';
   return 'onbekend';
@@ -146,18 +146,41 @@ function parseRaisin(text) {
 // Bevat per deposito: partnerbank, FDA-kenmerk, inleg, looptijd, rente, ingangs- en vervaldatum.
 // Wordt niet als nieuwe rekening geïmporteerd maar aan het deposito met hetzelfde kenmerk gekoppeld.
 function parseRaisinProductsheet(text) {
-  const iso = (d) => { const m = d && d.match(/(\d{2})\.(\d{2})\.(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+  // Datums komen voor als 26.05.2026 of 20-7-23 (tweecijferig jaar)
+  const iso = (d) => {
+    const m = d && d.match(/(\d{1,2})[.-](\d{1,2})[.-](\d{2,4})/);
+    if (!m) return '';
+    const jaar = m[3].length === 2 ? `20${m[3]}` : m[3];
+    return `${jaar}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  };
+  // Bedragen: "5000,00", "10000.0", "5.000,00"
+  const bedrag = (t) => {
+    if (t.includes(',')) return parseFloat(t.replace(/\./g, '').replace(',', '.'));
+    if (/^\d+\.\d{1,2}$/.test(t)) return parseFloat(t);
+    return parseFloat(t.replace(/\./g, ''));
+  };
+  // pdf.js knipt woorden soms op ("Inle g be d rag"): labels tolerant voor spaties matchen
+  const lbl = (w) => w.split('').map(c => c === ' ' ? '\\s+' : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*');
   const kenmerk = (text.match(/FDA_[\d_]+/) || [''])[0];
-  const partnerbank = ((text.match(/^\s*([^\n]*?)\s+BAC_[\d_]+/m) || [])[1] || '').trim();
-  const inleg = text.match(/Inlegbedrag in EUR[\s\S]{0,40}?(\d[\d.]*(?:,\d+)?)/);
-  const looptijd = text.match(/Looptijd in maanden[\s\S]{0,40}?(\d+)/);
-  const rente = text.match(/Bruto rentetarief op jaarbasis[\s\S]{0,40}?(\d+(?:[.,]\d+)?)\s*%/);
-  const start = text.match(/Ingangsdatum[\s\S]{0,40}?(\d{2}\.\d{2}\.\d{4})/);
-  const eind = text.match(/Vervaldatum[\s\S]{0,40}?(\d{2}\.\d{2}\.\d{4})/);
+  // Partnerbank: eerste regel na de titel (en de Engelse ondertitel) die geen kenmerk is
+  const regels = text.split('\n').map(r => r.trim()).filter(Boolean);
+  const titelIdx = regels.findIndex(r => /^Bevestiging/i.test(r));
+  let partnerbank = '';
+  for (let i = titelIdx + 1; i < regels.length && i <= titelIdx + 4; i++) {
+    if (/onfirmation/i.test(regels[i])) continue;
+    const kandidaat = regels[i].replace(/\s*(BAC|FDA)_[\d_]+.*/, '').trim();
+    if (kandidaat && !/^Klantidentificatie/i.test(kandidaat)) partnerbank = kandidaat;
+    break;
+  }
+  const inleg = text.match(new RegExp(lbl('Inlegbedrag in EUR') + '[\\s\\S]{0,80}?(\\d[\\d.]*(?:,\\d+)?)'));
+  const looptijd = text.match(new RegExp(lbl('Looptijd') + '[\\s\\S]{0,60}?(\\d+)'));
+  const rente = text.match(new RegExp(lbl('Bruto rentetarief op jaarbasis') + '[\\s\\S]{0,60}?(\\d+(?:[.,]\\d+)?)\\s*%'));
+  const start = text.match(new RegExp(lbl('Ingangsdatum') + '[\\s\\S]{0,60}?(\\d{1,2}[.-]\\d{1,2}[.-]\\d{2,4})'));
+  const eind = text.match(new RegExp(lbl('Vervaldatum') + '[\\s\\S]{0,60}?(\\d{1,2}[.-]\\d{1,2}[.-]\\d{2,4})'));
   if (!kenmerk) return { type: 'onbekend', fout: 'Geen FDA-kenmerk gevonden in productsheet' };
   const sheet = {
     kenmerk, partnerbank,
-    startbedrag: inleg ? parseBedrag(inleg[1]) : 0,
+    startbedrag: inleg ? bedrag(inleg[1]) : 0,
     looptijd_maanden: looptijd ? parseInt(looptijd[1], 10) : 0,
     rente_pct: rente ? parseFloat(rente[1].replace(',', '.')) : 0,
     deposito_startdatum: iso(start && start[1]),
