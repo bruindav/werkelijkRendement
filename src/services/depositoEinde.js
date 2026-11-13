@@ -49,12 +49,3 @@ export function depositoStatus(rek, jaar, peil) {
   if (eind <= einde) return { status: 'verlopen', datum };
   return null;
 }
-
-// Deposito waarvan de einddatum vandaag al voorbij is (ook als het in het gekozen jaar nog liep).
-// Geeft de einddatum als tekst, of '' als het niet (of nog niet) is verlopen.
-export function inmiddelsVerlopen(rek) {
-  if (rek.type !== 'deposito') return '';
-  const eind = bepaalEinddatum(rek);
-  if (!eind || isNaN(eind) || eind >= new Date()) return '';
-  return eind.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}

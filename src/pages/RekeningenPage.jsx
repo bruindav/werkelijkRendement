@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import db from '../services/localDb';
-import { depositoStatus, looptijdOntbreekt, inmiddelsVerlopen } from '../services/depositoEinde';
+import { depositoStatus, looptijdOntbreekt } from '../services/depositoEinde';
 import { formatEuro } from '../services/berekening';
 import Breadcrumb from '../components/Breadcrumb';
 import { laadHoudersMap, laadMeta, slaRekeningMetaOp, slaFilterOp, metaSleutel, bepaalEigenaar, EIGENAREN } from '../services/rekeningMeta';
@@ -35,7 +35,6 @@ async function laadJaar(jaar) {
     return {
       ...r,
       verlopen: dStatus?.status === 'verlopen' ? dStatus.datum : '',
-      afgelopen: dStatus?.status === 'verlopen' ? '' : inmiddelsVerlopen(r),
       bankNaam: bank?.naam || '',
       sleutelBron: bank?.naam || '',
       begin: isBel ? pos.reduce((t, p) => t + (p.jan1_waarde || 0), 0) : (r.jan1_saldo || 0),
@@ -86,7 +85,7 @@ function RekeningKaart({ r, eindLabel, vw, eigenaar, doel, doelen, onOpslaan }) 
     <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-white font-medium leading-tight">{r.naam}{r.verlopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300 whitespace-nowrap">Verlopen {r.verlopen}</span>}{r.afgelopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/20 text-slate-300 whitespace-nowrap">Afgelopen {r.afgelopen}</span>}{looptijdOntbreekt(r) && <span title="Importeer de Raisin-productsheet of vul start-/einddatum in" className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-300 whitespace-nowrap">Looptijd onbekend</span>}</p>
+          <p className="text-white font-medium leading-tight">{r.naam}{r.verlopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300 whitespace-nowrap">Verlopen {r.verlopen}</span>}{looptijdOntbreekt(r) && <span title="Importeer de Raisin-productsheet of vul start-/einddatum in" className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-300 whitespace-nowrap">Looptijd onbekend</span>}</p>
           <p className="text-xs text-slate-500 mt-0.5">
             {r.bankNaam}{r.rekeningnummer ? ` · ${r.rekeningnummer}` : ''}
           </p>

@@ -367,6 +367,8 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
   const dagenTotEinde = rek.deposito_einddatum
     ? Math.ceil((new Date(rek.deposito_einddatum) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
+  // 'Verlopen' alleen tonen als de einddatum in het bekeken jaar of eerder valt
+  const verlopenInJaar = rek.deposito_einddatum ? new Date(rek.deposito_einddatum).getFullYear() <= Number(year) : false;
   const einddatumTekst = rek.deposito_einddatum
     ? new Date(rek.deposito_einddatum).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : '';
@@ -455,10 +457,10 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
                 {rek.ontvangen_rente > 0 && (
                   <span className="text-emerald-400">rente: {fmtGeheel(rek.ontvangen_rente)}</span>
                 )}
-                {dagenTotEinde !== null && dagenTotEinde > 0 && (
+                {dagenTotEinde !== null && (dagenTotEinde > 0 || !verlopenInJaar) && (
                   <span className="text-amber-400">Einddatum {einddatumTekst}</span>
                 )}
-                {dagenTotEinde !== null && dagenTotEinde <= 0 && (
+                {dagenTotEinde !== null && dagenTotEinde <= 0 && verlopenInJaar && (
                   <span className="text-red-400">Verlopen {einddatumTekst}</span>
                 )}
                 {rek.partnerbank && (
