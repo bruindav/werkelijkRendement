@@ -367,6 +367,9 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
   const dagenTotEinde = rek.deposito_einddatum
     ? Math.ceil((new Date(rek.deposito_einddatum) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
+  const einddatumTekst = rek.deposito_einddatum
+    ? new Date(rek.deposito_einddatum).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : '';
 
   // Gecombineerde save: naam/type-velden + bedragen in één update
   const handleSaveAlles = async (data) => {
@@ -453,10 +456,10 @@ function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps
                   <span className="text-emerald-400">rente: {fmtGeheel(rek.ontvangen_rente)}</span>
                 )}
                 {dagenTotEinde !== null && dagenTotEinde > 0 && (
-                  <span className="text-amber-400">{dagenTotEinde}d tot einde</span>
+                  <span className="text-amber-400">Einddatum {einddatumTekst}</span>
                 )}
                 {dagenTotEinde !== null && dagenTotEinde <= 0 && (
-                  <span className="text-red-400">Verlopen</span>
+                  <span className="text-red-400">Verlopen {einddatumTekst}</span>
                 )}
                 {rek.partnerbank && (
                   <span className="text-slate-300">🏦 {rek.partnerbank}</span>
