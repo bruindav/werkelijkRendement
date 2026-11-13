@@ -618,6 +618,7 @@ export default function Dashboard() {
                 { key: 'dec31', label: '31 dec' },
                 { key: 'einde', label: 'Einde' },
                 { key: 'rendement', label: 'Rendement' },
+                { key: 'kenmerk', label: 'FDA' },
               ].map(({ key, label }) => (
                 <button key={key} onClick={() => setMobieleKolom(key)}
                   className={`flex-1 py-1 rounded-lg text-xs font-medium transition-colors ${
@@ -629,12 +630,13 @@ export default function Dashboard() {
             </div>
 
             {/* Desktop kolomheaders */}
-            <div className="hidden sm:grid grid-cols-[1fr_120px_120px_120px_100px_32px] gap-2 px-5 py-2 text-xs text-slate-500 border-b border-slate-800">
+            <div className="hidden sm:grid grid-cols-[1fr_120px_120px_120px_100px_150px_6px] gap-6 px-5 py-2 text-xs text-slate-500 border-b border-slate-800">
               <span>Rekening</span>
               <span className="text-right">1 januari</span>
               <span className="text-right">31 december</span>
               <span className="text-right" title="Verwacht saldo op einddatum (deposito's incl. rente)">Einde</span>
               <span className="text-right">Rendement</span>
+              <span className="text-right">Kenmerk</span>
               <span></span>
             </div>
 
@@ -654,13 +656,14 @@ export default function Dashboard() {
                     {mobieleKolom === 'einde' && <span className="text-white">{formatEuro(bank.einde)}</span>}
                     {mobieleKolom === 'rendement' && <span className={bank.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{bank.rendement >= 0 ? '+' : ''}{formatEuro(bank.rendement)}</span>}
                   </div>
-                  <div className="hidden sm:flex items-center gap-6 text-sm">
-                    <span className="w-[120px] text-right text-white">{formatEuro(bank.jan1)}</span>
-                    <span className="w-[120px] text-right text-white">{formatEuro(bank.dec31)}</span>
-                    <span className="w-[120px] text-right text-white">{formatEuro(bank.einde)}</span>
-                    <span className={`w-[100px] text-right font-medium ${bank.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <div className="hidden sm:flex items-center gap-6 text-sm shrink-0">
+                    <span className="w-[120px] shrink-0 text-right text-white">{formatEuro(bank.jan1)}</span>
+                    <span className="w-[120px] shrink-0 text-right text-white">{formatEuro(bank.dec31)}</span>
+                    <span className="w-[120px] shrink-0 text-right text-white">{formatEuro(bank.einde)}</span>
+                    <span className={`w-[100px] shrink-0 text-right font-medium ${bank.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {bank.rendement >= 0 ? '+' : ''}{formatEuro(bank.rendement)}
                     </span>
+                    <span className="w-[150px] shrink-0" />
                   </div>
                   <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 flex-shrink-0" />
                 </Link>
@@ -686,15 +689,17 @@ export default function Dashboard() {
                         {mobieleKolom === 'jan1' && <span className="text-slate-200">{formatEuro(rek.jan1)}</span>}
                         {mobieleKolom === 'dec31' && <span className="text-slate-200">{formatEuro(rek.dec31)}</span>}
                         {mobieleKolom === 'einde' && <span className={rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-200'} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>}
+                        {mobieleKolom === 'kenmerk' && <span className="text-xs font-mono text-slate-300">{rek.kenmerk || '–'}</span>}
                         {mobieleKolom === 'rendement' && <span className={rek.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}</span>}
                       </div>
-                      <div className="hidden sm:flex items-center gap-6 text-xs">
-                        <span className="w-[120px] text-right text-slate-200">{formatEuro(rek.jan1)}</span>
-                        <span className="w-[120px] text-right text-slate-200">{formatEuro(rek.dec31)}</span>
-                        <span className={`w-[120px] text-right ${rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-200'}`} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>
-                        <span className={`w-[100px] text-right ${rek.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      <div className="hidden sm:flex items-center gap-6 text-xs shrink-0">
+                        <span className="w-[120px] shrink-0 text-right text-slate-200">{formatEuro(rek.jan1)}</span>
+                        <span className="w-[120px] shrink-0 text-right text-slate-200">{formatEuro(rek.dec31)}</span>
+                        <span className={`w-[120px] shrink-0 text-right ${rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-200'}`} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>
+                        <span className={`w-[100px] shrink-0 text-right ${rek.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}
                         </span>
+                        <span className="w-[150px] shrink-0 text-right text-xs font-mono text-slate-300 truncate" title={rek.kenmerk || ''}>{rek.kenmerk || ''}</span>
                       </div>
                       <div className="w-[18px] flex-shrink-0" />
                     </Link>
@@ -714,13 +719,14 @@ export default function Dashboard() {
                   {mobieleKolom === 'einde' && <span className="text-white">{formatEuro(totalen.totaalEinde)}</span>}
                   {mobieleKolom === 'rendement' && <span className={totalen.totaalRendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{totalen.totaalRendement >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendement)}</span>}
                 </div>
-                <div className="hidden sm:flex items-center gap-6 text-sm">
-                  <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenJan1)}</span>
-                  <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenDec31)}</span>
-                  <span className="w-[120px] text-right font-semibold text-white">{formatEuro(totalen.totaalEinde)}</span>
-                  <span className={`w-[100px] text-right font-bold ${totalen.totaalRendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <div className="hidden sm:flex items-center gap-6 text-sm shrink-0">
+                  <span className="w-[120px] shrink-0 text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenJan1)}</span>
+                  <span className="w-[120px] shrink-0 text-right font-semibold text-white">{formatEuro(totalen.totaalVermogenDec31)}</span>
+                  <span className="w-[120px] shrink-0 text-right font-semibold text-white">{formatEuro(totalen.totaalEinde)}</span>
+                  <span className={`w-[100px] shrink-0 text-right font-bold ${totalen.totaalRendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {totalen.totaalRendement >= 0 ? '+' : ''}{formatEuro(totalen.totaalRendement)}
                   </span>
+                  <span className="w-[150px] shrink-0" />
                 </div>
                 <div className="w-[18px] flex-shrink-0" />
               </div>
