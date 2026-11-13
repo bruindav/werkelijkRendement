@@ -695,7 +695,7 @@ export default function Dashboard() {
                     <Link
                       to={rek.type === 'beleggen'
                         ? `/jaar/${selectedYear}/bank/${bank.id}/rekening/${rek.id}`
-                        : `/jaar/${selectedYear}/bank/${bank.id}`}
+                        : `/jaar/${selectedYear}/bank/${bank.id}?rekening=${rek.id}`}
                       className="flex items-center gap-3 px-5 py-2.5 pl-14 hover:bg-slate-900/30 transition-colors group"
                     >
                       <span className="text-base flex-shrink-0">{typeEmoji}</span>

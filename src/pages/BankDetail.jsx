@@ -6,7 +6,7 @@
 // Fix 20 - Spaar/deposito inline in BankDetail, geen apart niveau
 import { wisBewaardeGegevens } from '../services/rekeningMeta';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useRekeningen, useBank } from '../hooks/useLocalDB';
 import Breadcrumb from '../components/Breadcrumb';
@@ -359,8 +359,8 @@ function RekeningnummerInlineEdit({ rek, onUpdate }) {
 
 // ============ REKENING RIJ ============
 // Eén klik opent het volledige formulier (naam + type + bedragen)
-function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps }) {
-  const [open, setOpen] = useState(false);
+function RekeningRij({ rek, year, bankId, onUpdate, onVerwijder, dragHandleProps, startOpen = false }) {
+  const [open, setOpen] = useState(startOpen);
   const info = typeInfo(rek.type);
 
   const heeftData = (rek.jan1_saldo || rek.dec31_saldo || rek.ontvangen_rente);
@@ -536,6 +536,9 @@ export default function BankDetail() {
   const bank = useBank(user?.uid, year, bankId);
   const { rekeningen, loading, voegRekeningToe, updateRekening, verwijderRekening, slaVolgorde } = useRekeningen(user?.uid, year, bankId);
   const [toonForm, setToonForm] = useState(false);
+  const [zoekParams] = useSearchParams();
+  const alleenRekId = zoekParams.get('rekening');   // vanuit het dashboard: alleen deze rekening tonen
+  const zichtbareRekeningen = alleenRekId ? rekeningen.filter(r => r.id === alleenRekId) : rekeningen;
 
   const handleVerwijder = async (rek) => {
     if (window.confirm(`Rekening "${rek.naam}" verwijderen? Alle data wordt ook verwijderd.`)) {
@@ -585,9 +588,15 @@ export default function BankDetail() {
       ) : (
         <>
 
+        {alleenRekId && zichtbareRekeningen.length > 0 && (
+          <div className="flex items-center justify-between gap-3 mb-3 px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-sm">
+            <span className="text-blue-200 truncate">Alleen: {zichtbareRekeningen[0].naam}</span>
+            <Link to={`/jaar/${year}/bank/${bankId}`} className="text-blue-300 hover:text-white whitespace-nowrap">Alle rekeningen →</Link>
+          </div>
+        )}
         <DragLijst
-          items={rekeningen}
-          onVolgorde={slaVolgorde}
+          items={zichtbareRekeningen}
+          onVolgorde={alleenRekId ? () => {} : slaVolgorde}
           renderItem={(rek, dragHandleProps) => (
             <RekeningRij
               key={rek.id}
@@ -597,6 +606,7 @@ export default function BankDetail() {
               onUpdate={updateRekening}
               onVerwijder={handleVerwijder}
               dragHandleProps={dragHandleProps}
+              startOpen={!!alleenRekId}
             />
           )}
         />
