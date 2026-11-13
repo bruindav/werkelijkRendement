@@ -31,7 +31,7 @@ export function detectBankType(text) {
     return 'centraal_beheer';
   }
   if (/ING Bank N\.V\./.test(text) && /ING (Betaalrekening|Oranje Spaarrekening|Spaarrekening|Deposito|Bonus)/i.test(text)) return 'ing';
-  if (/Bevestiging\s+(t\s*e\s*r\s*m\s*i\s*j\s*n\s*)?d\s*e\s*p\s*o\s*s\s*i\s*t\s*o/i.test(text) && /FDA_\d/.test(text)) return 'raisin_productsheet';
+  if (/FDA_\d/.test(text) && /I\s*n\s*l\s*e\s*g\s*b\s*e\s*d\s*r\s*a\s*g/.test(text) && /I\s*n\s*g\s*a\s*n\s*g\s*s\s*d\s*a\s*t\s*u\s*m/.test(text) && /V\s*e\s*r\s*v\s*a\s*l\s*d\s*a\s*t\s*u\s*m/.test(text)) return 'raisin_productsheet';
   if (text.toLowerCase().includes('raisin')) return 'raisin';
   if (text.includes('ABN AMRO')) return 'abn_amro';
   return 'onbekend';
