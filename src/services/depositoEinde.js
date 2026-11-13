@@ -12,6 +12,13 @@ function bepaalEinddatum(rek) {
   return null;
 }
 
+// true als dit een deposito is waarvan geen einddatum (of startdatum + looptijd) bekend is
+export function looptijdOntbreekt(rek) {
+  if (rek.type !== 'deposito') return false;
+  const d = bepaalEinddatum(rek);
+  return !d || isNaN(d);
+}
+
 export function eindeSaldo(rek, jaar, dec31) {
   if (rek.type !== 'deposito') return { bedrag: dec31, onbekend: false };
   const eind = bepaalEinddatum(rek);
