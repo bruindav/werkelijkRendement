@@ -259,7 +259,8 @@ export default function Dashboard() {
               einde: ein.bedrag,
               eindeOnbekend: ein.onbekend,
               geenLooptijd: looptijdOntbreekt(rek),
-              verlopen: dStatus?.status === 'verlopen' ? dStatus.datum : inmiddelsVerlopen(rek),
+              verlopen: dStatus?.status === 'verlopen' ? dStatus.datum : '',
+              afgelopen: dStatus?.status === 'verlopen' ? '' : inmiddelsVerlopen(rek),
               id: rek.id,
               naam: rek.naam,
               rekeningnummer: rek.rekeningnummer,
@@ -703,7 +704,7 @@ export default function Dashboard() {
                         <span title={e || 'Eigenaar onbekend'} className={`w-4 h-4 flex items-center justify-center rounded text-[9px] font-bold flex-shrink-0 ${e ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-600'}`}>{letter}</span>
                       ); })()}
                       <span className="text-sm text-slate-200 flex-1 leading-tight break-words">{rek.naam}
-                        {rek.verlopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300 whitespace-nowrap">Verlopen {rek.verlopen}</span>}
+                        {rek.verlopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300 whitespace-nowrap">Verlopen {rek.verlopen}</span>}{rek.afgelopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/20 text-slate-300 whitespace-nowrap">Afgelopen {rek.afgelopen}</span>}
                         {(() => { const dl = doelVan(rek, bank.naam); return (
                           <button type="button" title="Doel kiezen of wijzigen"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setNieuwDoel(''); setDoelEdit(doelEdit === rek.id ? null : rek.id); }}
