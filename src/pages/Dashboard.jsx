@@ -1,14 +1,14 @@
 // Versie: Fix137
 // Fix116 - Dashboard: sparen/beleggen split, toggle bank specificatie
 // Fix100 - getDoc Firebase vervangen door getInstellingen localDb
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken, getDashboardData } from '../hooks/useLocalDB';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatEuroGeheel, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
 import { eindeSaldo, depositoStatus, looptijdOntbreekt } from '../services/depositoEinde';
 import { getInstellingen } from '../services/localDb';
-import { laadMeta, laadHoudersMap, bepaalEigenaar, metaSleutel, EIGENAREN } from '../services/rekeningMeta';
+import { laadMeta, laadHoudersMap, bepaalEigenaar, metaSleutel, slaRekeningMetaOp, EIGENAREN } from '../services/rekeningMeta';
 import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle, ChevronDown } from 'lucide-react';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
@@ -149,6 +149,18 @@ export default function Dashboard() {
     if (!eigenaarInfo.meta) return null;
     const r = { ...rek, houders: rek.houders || eigenaarInfo.houders[metaSleutel(rek, bankNaam)] || '' };
     return bepaalEigenaar(r, eigenaarInfo.meta, bankNaam);
+  };
+  const [doelEdit, setDoelEdit] = useState(null);   // id van rekening waarvan het doel wordt gekozen
+  const [nieuwDoel, setNieuwDoel] = useState('');
+  const bestaandeDoelen = [...new Set(Object.values(eigenaarInfo.meta?.rekeningen || {}).map(x => x.doel).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'nl', { sensitivity: 'base' }));
+  const kiesDoel = async (rek, bankNaam, doel) => {
+    const sleutel = metaSleutel(rek, bankNaam);
+    const huidig = eigenaarInfo.meta?.rekeningen[sleutel] || {};
+    await slaRekeningMetaOp(sleutel, { eigenaar: huidig.eigenaar || null, doel: (doel || '').trim() });
+    const meta = await laadMeta();
+    setEigenaarInfo(prev => ({ ...prev, meta }));
+    setDoelEdit(null); setNieuwDoel('');
   };
   const doelVan = (rek, bankNaam) => eigenaarInfo.meta?.rekeningen[metaSleutel(rek, bankNaam)]?.doel || '';
   const rekMagTonen = (rek, bankNaam) => {
@@ -676,8 +688,8 @@ export default function Dashboard() {
                 {bank.rekeningen.map(rek => {
                   const typeEmoji = rek.type === 'beleggen' ? '📈' : rek.type === 'deposito' ? '🔒' : (rek.type === 'rekening-courant') ? '💳' : rek.type === 'geldrekening' ? '💶' : '🏦';
                   return (
+                    <React.Fragment key={rek.id}>
                     <Link
-                      key={rek.id}
                       to={rek.type === 'beleggen'
                         ? `/jaar/${selectedYear}/bank/${bank.id}/rekening/${rek.id}`
                         : `/jaar/${selectedYear}/bank/${bank.id}`}
@@ -689,6 +701,13 @@ export default function Dashboard() {
                       ); })()}
                       <span className="text-sm text-slate-200 flex-1 leading-tight break-words">{rek.naam}
                         {rek.verlopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300 whitespace-nowrap">Verlopen {rek.verlopen}</span>}
+                        {(() => { const dl = doelVan(rek, bank.naam); return (
+                          <button type="button" title="Doel kiezen of wijzigen"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setNieuwDoel(''); setDoelEdit(doelEdit === rek.id ? null : rek.id); }}
+                            className={`ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap border ${dl ? 'bg-sky-500/15 border-sky-500/30 text-sky-300' : 'border-dashed border-slate-600 text-slate-500 hover:text-slate-300'}`}>
+                            {dl ? `🎯 ${dl}` : '+ doel'}
+                          </button>
+                        ); })()}
                         {rek.geenLooptijd && <span title="Importeer de Raisin-productsheet of vul start-/einddatum in" className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-300 whitespace-nowrap">Looptijd onbekend</span>}
                       </span>
                       {/* Mobiel */}
@@ -710,6 +729,30 @@ export default function Dashboard() {
                       </div>
                       <div className="w-[18px] flex-shrink-0" />
                     </Link>
+                    {doelEdit === rek.id && (
+                      <div className="pl-14 pr-5 pb-3 -mt-1 bg-slate-900/30">
+                        <p className="text-[11px] text-slate-400 mb-1.5">Doel voor {rek.naam}</p>
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {bestaandeDoelen.map(dl => (
+                            <button key={dl} onClick={() => kiesDoel(rek, bank.naam, dl)}
+                              className={`text-xs px-2.5 py-1 rounded-full border ${doelVan(rek, bank.naam) === dl ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-200 hover:border-slate-500'}`}>{dl}</button>
+                          ))}
+                          {doelVan(rek, bank.naam) && (
+                            <button onClick={() => kiesDoel(rek, bank.naam, '')} className="text-xs px-2.5 py-1 rounded-full border border-slate-700 text-slate-400 hover:text-white">Geen doel</button>
+                          )}
+                          {bestaandeDoelen.length === 0 && <span className="text-xs text-slate-500">Nog geen doelen – typ er een hieronder.</span>}
+                        </div>
+                        <div className="flex gap-2">
+                          <input value={nieuwDoel} onChange={e => setNieuwDoel(e.target.value)} placeholder="Nieuw doel, bijv. Hypotheek"
+                            onKeyDown={e => e.key === 'Enter' && nieuwDoel.trim() && kiesDoel(rek, bank.naam, nieuwDoel)}
+                            className="flex-1 min-w-0 bg-slate-800 border border-slate-700 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          <button onClick={() => nieuwDoel.trim() && kiesDoel(rek, bank.naam, nieuwDoel)} disabled={!nieuwDoel.trim()}
+                            className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white disabled:opacity-40">OK</button>
+                          <button onClick={() => { setDoelEdit(null); setNieuwDoel(''); }} className="text-sm px-2 text-slate-400 hover:text-white">Sluiten</button>
+                        </div>
+                      </div>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </div>
