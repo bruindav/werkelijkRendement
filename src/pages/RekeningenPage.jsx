@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import db from '../services/localDb';
+import { depositoStatus } from '../services/depositoEinde';
 import { formatEuro } from '../services/berekening';
 import Breadcrumb from '../components/Breadcrumb';
 import { laadHoudersMap, laadMeta, slaRekeningMetaOp, slaFilterOp, metaSleutel, bepaalEigenaar, EIGENAREN } from '../services/rekeningMeta';
@@ -20,20 +21,24 @@ const norm = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const normNr = (t) => String(t || '').replace(/\s+/g, '').toLowerCase();
 
 async function laadJaar(jaar) {
+  const nu = new Date();
+  const peil = Number(jaar) === nu.getFullYear() ? nu : new Date(Number(jaar), 11, 31);
   const y = String(jaar);
   const banken = await db.banken.where('year').equals(y).toArray();
   const rekeningen = await db.rekeningen.filter(r => String(r.year) === y).toArray();
   const posities = await db.posities.filter(p => String(p.year) === y).toArray();
-  return rekeningen.map(r => {
+  return rekeningen.filter(r => depositoStatus(r, jaar, peil)?.status !== 'voorbij').map(r => {
     const bank = banken.find(b => b.id === r.bankId);
     const pos = posities.filter(p => p.rekeningId === r.id);
     const isBel = r.type === 'beleggen';
+    const dStatus = depositoStatus(r, jaar, peil);
     return {
       ...r,
+      verlopen: dStatus?.status === 'verlopen' ? dStatus.datum : '',
       bankNaam: bank?.naam || '',
       sleutelBron: bank?.naam || '',
       begin: isBel ? pos.reduce((t, p) => t + (p.jan1_waarde || 0), 0) : (r.jan1_saldo || 0),
-      eind: isBel ? pos.reduce((t, p) => t + (p.dec31_waarde || 0), 0) : (r.dec31_saldo || 0),
+      eind: isBel ? pos.reduce((t, p) => t + (p.dec31_waarde || 0), 0) : (dStatus?.status === 'verlopen' ? 0 : (r.dec31_saldo || 0)),
       ontvangen: isBel ? pos.reduce((t, p) => t + (p.dividend || 0) + (p.rente || 0), 0) : (r.ontvangen_rente || 0),
     };
   });
@@ -80,7 +85,7 @@ function RekeningKaart({ r, eindLabel, vw, eigenaar, doel, doelen, onOpslaan }) 
     <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
       <div className="mb-3 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-white font-medium leading-tight">{r.naam}</p>
+          <p className="text-white font-medium leading-tight">{r.naam}{r.verlopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300 whitespace-nowrap">Verlopen {r.verlopen}</span>}</p>
           <p className="text-xs text-slate-500 mt-0.5">
             {r.bankNaam}{r.rekeningnummer ? ` · ${r.rekeningnummer}` : ''}
           </p>

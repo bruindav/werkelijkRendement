@@ -26,3 +26,19 @@ export function eindeSaldo(rek, jaar, dec31) {
   else bedrag = dec31 * (1 + r * dagen / 365);                                       // pas bij einde looptijd
   return { bedrag, onbekend: false };
 }
+
+// Status van een deposito in een jaar:
+//  'voorbij'  = einddatum ligt vóór 1 januari van het jaar → niet meer tonen in dat jaar
+//  'verlopen' = einddatum t/m peildatum (standaard 31 december) → saldo is 0, wel tonen
+// Geeft { status, datum } of null (geen deposito / einddatum onbekend / nog lopend).
+export function depositoStatus(rek, jaar, peil) {
+  if (rek.type !== 'deposito') return null;
+  const eind = bepaalEinddatum(rek);
+  if (!eind || isNaN(eind)) return null;
+  const jan1 = new Date(Number(jaar), 0, 1);
+  const einde = peil || new Date(Number(jaar), 11, 31);
+  const datum = eind.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (eind < jan1) return { status: 'voorbij', datum };
+  if (eind <= einde) return { status: 'verlopen', datum };
+  return null;
+}

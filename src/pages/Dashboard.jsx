@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBanken, getDashboardData } from '../hooks/useLocalDB';
 import { berekenPositieRendement, vergelijkMethoden, formatEuro, formatEuroGeheel, formatPct, FORFAITAIR_TARIEVEN } from '../services/berekening';
-import { eindeSaldo } from '../services/depositoEinde';
+import { eindeSaldo, depositoStatus } from '../services/depositoEinde';
 import { getInstellingen } from '../services/localDb';
 import { laadMeta, laadHoudersMap, bepaalEigenaar, metaSleutel, EIGENAREN } from '../services/rekeningMeta';
 import { TrendingUp, TrendingDown, Building2, ArrowRight, AlertCircle, ChevronDown } from 'lucide-react';
@@ -210,6 +210,8 @@ export default function Dashboard() {
 
         for (const rek of bank.rekeningen) {
           if (!rekMagTonen(rek, bank.naam)) continue;
+          const dStatus = depositoStatus(rek, selectedYear);
+          if (dStatus?.status === 'voorbij') continue;   // deposito was al verlopen vóór 1 jan van dit jaar
           let rekJan1 = 0, rekDec31 = 0, rekRendement = 0;
 
           if (rek.type === 'beleggen' || !rek.type) {
@@ -226,7 +228,7 @@ export default function Dashboard() {
           } else {
             if (rek.jan1_saldo || rek.dec31_saldo || rek.ontvangen_rente) {
               rekJan1 = rek.jan1_saldo || 0;
-              rekDec31 = rek.dec31_saldo || 0;
+              rekDec31 = dStatus?.status === 'verlopen' ? 0 : (rek.dec31_saldo || 0);   // verlopen deposito: saldo 31 dec is 0
               rekRendement = (rek.ontvangen_rente || 0) - (rek.kosten || 0);
               aantalPosities++;
               totaalSparenJan1 += rekJan1;
@@ -242,6 +244,7 @@ export default function Dashboard() {
             bankRekeningen.push({
               einde: ein.bedrag,
               eindeOnbekend: ein.onbekend,
+              verlopen: dStatus?.status === 'verlopen' ? dStatus.datum : '',
               id: rek.id,
               naam: rek.naam,
               rekeningnummer: rek.rekeningnummer,
@@ -683,7 +686,9 @@ export default function Dashboard() {
                       {(() => { const e = eigenaarVan(rek, bank.naam); const letter = e ? e[0] : '?'; return (
                         <span title={e || 'Eigenaar onbekend'} className={`w-4 h-4 flex items-center justify-center rounded text-[9px] font-bold flex-shrink-0 ${e ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-600'}`}>{letter}</span>
                       ); })()}
-                      <span className="text-sm text-slate-200 flex-1 leading-tight break-words">{rek.naam}</span>
+                      <span className="text-sm text-slate-200 flex-1 leading-tight break-words">{rek.naam}
+                        {rek.verlopen && <span className="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300 whitespace-nowrap">Verlopen {rek.verlopen}</span>}
+                      </span>
                       {/* Mobiel */}
                       <div className="sm:hidden text-xs">
                         {mobieleKolom === 'jan1' && <span className="text-slate-200">{formatEuro(rek.jan1)}</span>}
