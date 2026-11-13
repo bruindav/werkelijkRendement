@@ -649,15 +649,15 @@ export default function Dashboard() {
                   <span className="font-semibold text-white flex-1 text-sm">{bank.naam}</span>
                   {/* Mobiel: toon geselecteerde kolom */}
                   <div className="sm:hidden text-sm font-medium">
-                    {mobieleKolom === 'jan1' && <span className="text-slate-300">{formatEuro(bank.jan1)}</span>}
-                    {mobieleKolom === 'dec31' && <span className="text-slate-300">{formatEuro(bank.dec31)}</span>}
-                    {mobieleKolom === 'einde' && <span className="text-slate-300">{formatEuro(bank.einde)}</span>}
+                    {mobieleKolom === 'jan1' && <span className="text-white">{formatEuro(bank.jan1)}</span>}
+                    {mobieleKolom === 'dec31' && <span className="text-white">{formatEuro(bank.dec31)}</span>}
+                    {mobieleKolom === 'einde' && <span className="text-white">{formatEuro(bank.einde)}</span>}
                     {mobieleKolom === 'rendement' && <span className={bank.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{bank.rendement >= 0 ? '+' : ''}{formatEuro(bank.rendement)}</span>}
                   </div>
                   <div className="hidden sm:flex items-center gap-6 text-sm">
-                    <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.jan1)}</span>
-                    <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.dec31)}</span>
-                    <span className="w-[120px] text-right text-slate-300">{formatEuro(bank.einde)}</span>
+                    <span className="w-[120px] text-right text-white">{formatEuro(bank.jan1)}</span>
+                    <span className="w-[120px] text-right text-white">{formatEuro(bank.dec31)}</span>
+                    <span className="w-[120px] text-right text-white">{formatEuro(bank.einde)}</span>
                     <span className={`w-[100px] text-right font-medium ${bank.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {bank.rendement >= 0 ? '+' : ''}{formatEuro(bank.rendement)}
                     </span>
@@ -680,19 +680,19 @@ export default function Dashboard() {
                       {(() => { const e = eigenaarVan(rek, bank.naam); const letter = e ? e[0] : '?'; return (
                         <span title={e || 'Eigenaar onbekend'} className={`w-4 h-4 flex items-center justify-center rounded text-[9px] font-bold flex-shrink-0 ${e ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-600'}`}>{letter}</span>
                       ); })()}
-                      <span className="text-sm text-slate-400 flex-1 leading-tight break-words">{rek.naam}</span>
+                      <span className="text-sm text-slate-200 flex-1 leading-tight break-words">{rek.naam}</span>
                       {/* Mobiel */}
                       <div className="sm:hidden text-xs">
-                        {mobieleKolom === 'jan1' && <span className="text-slate-500">{formatEuro(rek.jan1)}</span>}
-                        {mobieleKolom === 'dec31' && <span className="text-slate-500">{formatEuro(rek.dec31)}</span>}
-                        {mobieleKolom === 'einde' && <span className={rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-500'} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>}
-                        {mobieleKolom === 'rendement' && <span className={rek.rendement >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'}>{rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}</span>}
+                        {mobieleKolom === 'jan1' && <span className="text-slate-200">{formatEuro(rek.jan1)}</span>}
+                        {mobieleKolom === 'dec31' && <span className="text-slate-200">{formatEuro(rek.dec31)}</span>}
+                        {mobieleKolom === 'einde' && <span className={rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-200'} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>}
+                        {mobieleKolom === 'rendement' && <span className={rek.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}>{rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}</span>}
                       </div>
                       <div className="hidden sm:flex items-center gap-6 text-xs">
-                        <span className="w-[120px] text-right text-slate-500">{formatEuro(rek.jan1)}</span>
-                        <span className="w-[120px] text-right text-slate-500">{formatEuro(rek.dec31)}</span>
-                        <span className={`w-[120px] text-right ${rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-500'}`} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>
-                        <span className={`w-[100px] text-right ${rek.rendement >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'}`}>
+                        <span className="w-[120px] text-right text-slate-200">{formatEuro(rek.jan1)}</span>
+                        <span className="w-[120px] text-right text-slate-200">{formatEuro(rek.dec31)}</span>
+                        <span className={`w-[120px] text-right ${rek.eindeOnbekend ? 'text-slate-600 italic' : 'text-slate-200'}`} title={rek.eindeOnbekend ? 'Einddatum onbekend' : ''}>{formatEuro(rek.einde)}</span>
+                        <span className={`w-[100px] text-right ${rek.rendement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {rek.rendement >= 0 ? '+' : ''}{formatEuro(rek.rendement)}
                         </span>
                       </div>
