@@ -1,4 +1,4 @@
-// Versie: Fix144
+// Versie: Fix171
 // PDF Parser - volledig client-side met pdf.js
 // Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO, Evi (Van Lanschot)
 // Fix101 - ABN AMRO parser herschreven voor nieuw PDF-formaat 2025
@@ -23,6 +23,8 @@ export function detectBankType(text) {
   if (text.includes('Meewind') || text.includes('Zeewind') || text.includes('MW0')) return 'meewind';
   if (text.includes('Beleggingsrekening') && text.includes('Centraal Beheer') && text.includes('totaal beleggingen')) return 'cb_beleggen_nieuw';
   if (text.includes('DEGIRO') && text.includes('Portefeuilleoverzicht')) return 'degiro';
+  // Fix171: DEGIRO rekeningoverzicht (transacties) — vult aankopen, verkopen en kosten aan
+  if (text.includes('DEGIRO') && /Rekeningoverzicht van \d{2}-\d{2}-\d{4}/.test(text)) return 'degiro_transacties';
   if (text.includes('Collin Crowdfund') || text.includes('JAAROPGAVE') && text.includes('Portefeuillewaarde')) return 'collin';
   if (text.includes('Evi') && text.includes('Van Lanschot')) return 'evi';
   if (text.includes('Fiscaal jaaroverzicht') && text.includes('Vermogen per')) return 'evi';
@@ -461,6 +463,7 @@ function parseerPDFBasis(text) {
     case 'abn_amro':        return parseAbnAmro(text);
     case 'evi':             return parseEviTekst(text);
     case 'degiro':          return parseDegiro(text);
+    case 'degiro_transacties': return parseDegiroTransacties(text);
     case 'collin':          return parseCollin(text);
     case 'meewind':         return parseMeewind(text);
     case 'cb_beleggen_nieuw': return parseCBBeleggenNieuw(text);
@@ -631,6 +634,98 @@ function parseDegiro(text) {
   });
 
   return { bank: 'DEGIRO', type: 'degiro', jaar, rekeningen };
+}
+
+// ============ DEGIRO REKENINGOVERZICHT (transacties) ============
+// Fix171: haalt per fonds (ISIN) de aankopen, verkopen en transactiekosten uit het rekeningoverzicht,
+// plus algemene kosten zonder fonds (zoals aansluitingskosten beurzen). Bedragen in EUR.
+function parseDegiroTransacties(text) {
+  const periode = text.match(/Rekeningoverzicht van \d{2}-\d{2}-(\d{4}) t\/m \d{2}-\d{2}-(\d{4})/);
+  const jaar = periode ? parseInt(periode[2]) : null;
+  const r2 = (n) => Math.round((n || 0) * 100) / 100;
+
+  // Regel: datum tijd valutadatum [product ISIN] omschrijving [FX] VAL mutatie [VAL saldo]
+  const RIJ = /^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}:\d{2})\s+\d{2}-\d{2}-\d{4}\s+(.*)$/;
+  const EIND = /\s+(?:(\d+,\d+)\s+)?([A-Z]{3})\s+(-?[\d.]+,\d+)(?:\s+[A-Z]{3}\s+-?[\d.]+,\d+)?$/;
+  const rijen = [];
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(RIJ);
+    if (!m) continue;
+    const [, dd, mm, jjjj, tijd, rest] = m;
+    if (jaar && parseInt(jjjj) !== jaar) continue;
+    const eind = rest.match(EIND);
+    if (!eind) continue;
+    const voor = rest.slice(0, eind.index).trim();
+    const isinM = voor.match(/^(.*?)\s*\b([A-Z]{2}[A-Z0-9]{9}\d)\s+(.+)$/);
+    rijen.push({
+      datum: `${jjjj}-${mm}-${dd}`, tijd,
+      product: isinM ? isinM[1].trim() : '',
+      isin: isinM ? isinM[2] : '',
+      omschrijving: (isinM ? isinM[3] : voor).trim(),
+      fx: eind[1] ? parseBedrag(eind[1]) : 0,
+      valuta: eind[2],
+      bedrag: parseBedrag(eind[3]),
+    });
+  }
+
+  const fondsen = new Map();   // isin -> { naam, isin, aankopen, verkopen, kosten }
+  const fonds = (r) => {
+    if (!fondsen.has(r.isin)) fondsen.set(r.isin, { naam: r.product, isin: r.isin, aankopen: [], verkopen: [], kosten: 0 });
+    return fondsen.get(r.isin);
+  };
+  const algemeneKosten = [];
+  const waarschuwingen = [];
+
+  for (const r of rijen) {
+    const trade = r.omschrijving.match(/\b(Koop|Verkoop)\s+([\d.]+(?:,\d+)?)\s+@\s+([\d.]+(?:,\d+)?)\s+([A-Z]{3})/);
+    if (trade && r.isin) {
+      const [, soort, aantalS, prijsS, handelValuta] = trade;
+      const aantal = parseBedrag(aantalS);
+      let totaal = Math.abs(r.bedrag);
+      const tx = { datum: r.datum, aantal, prijs: 0, totaal: 0, bron: 'degiro-rekeningoverzicht' };
+      if (r.valuta !== 'EUR') {
+        // Omrekenen: eerst de EUR-boeking van dezelfde transactie, anders via de FX-koers
+        const zelfde = rijen.filter(x => x !== r && x.datum === r.datum && x.tijd === r.tijd && x.isin === r.isin && /^Valuta/i.test(x.omschrijving));
+        const eur = zelfde.find(x => x.valuta === 'EUR');
+        const metFx = zelfde.find(x => x.fx > 0 && x.valuta === r.valuta);
+        if (eur) totaal = Math.abs(eur.bedrag);
+        else if (metFx) totaal = Math.abs(r.bedrag) / metFx.fx;
+        else waarschuwingen.push(`${r.product} ${r.datum}: geen EUR-koers gevonden, bedrag in ${r.valuta} overgenomen`);
+        tx.valuta = handelValuta;
+        tx.koers_lokaal = parseBedrag(prijsS);
+      }
+      tx.totaal = r2(totaal);
+      if (tx.totaal === 0) continue;   // bv. verlopen obligatie 'Verkoop @ 0': telt niet mee
+      tx.prijs = aantal > 0 ? Math.round((tx.totaal / aantal) * 10000) / 10000 : 0;
+      fonds(r)[soort === 'Koop' ? 'aankopen' : 'verkopen'].push(tx);
+      continue;
+    }
+    if (/kosten/i.test(r.omschrijving) && r.bedrag !== 0) {
+      const eurBedrag = r.valuta === 'EUR' ? -r.bedrag : (r.fx ? -r.bedrag / r.fx : -r.bedrag);
+      if (r.isin) fonds(r).kosten = r2(fonds(r).kosten + eurBedrag);
+      else algemeneKosten.push({ datum: r.datum, omschrijving: r.omschrijving, bedrag: r2(eurBedrag) });
+    }
+  }
+
+  const fondsLijst = [...fondsen.values()].filter(f => f.aankopen.length || f.verkopen.length || f.kosten);
+  const totaalAlgemeen = r2(algemeneKosten.reduce((t, k) => t + k.bedrag, 0));
+  const som = (lijst, key) => r2(lijst.reduce((t, f) => t + f[key].reduce((s, x) => s + x.totaal, 0), 0));
+  const samenvatting = {
+    aankopen: som(fondsLijst, 'aankopen'),
+    verkopen: som(fondsLijst, 'verkopen'),
+    kosten: r2(fondsLijst.reduce((t, f) => t + f.kosten, 0) + totaalAlgemeen),
+  };
+  const fmtE = (n) => `€ ${n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return {
+    bank: 'DEGIRO', type: 'degiro_transacties', jaar,
+    fondsen: fondsLijst, algemeneKosten, totaalAlgemeneKosten: totaalAlgemeen, samenvatting, waarschuwingen,
+    // Eén regel voor de importkaart (selectie aan/uit)
+    rekeningen: [{
+      naam: `Transacties: aankopen ${fmtE(samenvatting.aankopen)}, verkopen ${fmtE(samenvatting.verkopen)}, kosten ${fmtE(samenvatting.kosten)}`,
+      type: 'aanvulling',
+    }],
+  };
 }
 
 // ============ COLLIN CROWDFUND ============

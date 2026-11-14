@@ -1,4 +1,4 @@
-// Versie: Fix141
+// Versie: Fix171
 // Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
@@ -535,6 +535,78 @@ export async function importeerBank(jaar, bankData, rekeningRows) {
   // Lege bank (alles dubbel en zelf aangemaakt) opruimen
   if (!bestaandeBank && toegevoegd.length === 0) await db.banken.delete(bankId);
   return { bankId, toegevoegd, overgeslagen, bijgewerkt };
+}
+
+// ============ DEGIRO REKENINGOVERZICHT ============
+// Fix171: aankopen, verkopen en kosten uit het DEGIRO rekeningoverzicht aanvullen op de
+// bestaande DEGIRO-beleggingsrekening van dat jaar (uit het jaaroverzicht). Opnieuw importeren
+// vervangt de eerder geïmporteerde transacties; handmatig ingevoerde transacties blijven staan.
+const TRANSACTIE_BRON = 'degiro-rekeningoverzicht';
+const ALGEMENE_KOSTEN_NAAM = 'DEGIRO kosten (aansluitingskosten e.d.)';
+
+export async function verwerkDegiroTransacties(jaar, res) {
+  const norm = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const geenJaar = `Geen DEGIRO-beleggingsrekening in ${jaar} gevonden. Importeer eerst het DEGIRO jaaroverzicht van ${jaar}.`;
+  const banken = await db.banken.where('year').equals(String(jaar)).toArray();
+  const bankIds = banken.filter(b => /degiro/i.test(b.naam || '')).map(b => b.id);
+  if (!bankIds.length) throw new Error(geenJaar);
+  const rekeningen = await db.rekeningen.filter(r => bankIds.includes(r.bankId) && r.type === 'beleggen').toArray();
+  if (!rekeningen.length) throw new Error(geenJaar);
+
+  // Meerdere DEGIRO-rekeningen? Kies die met de meeste overeenkomende ISIN's
+  let rek = null, posities = [], beste = -1;
+  for (const r of rekeningen) {
+    const pos = await db.posities.where('rekeningId').equals(r.id).toArray();
+    const score = (res.fondsen || []).filter(f => pos.some(p => p.isin && p.isin === f.isin)).length;
+    if (score > beste) { beste = score; rek = r; posities = pos; }
+  }
+
+  // Handmatig al ingevoerd (zelfde datum, ongeveer zelfde bedrag)? Dan niet nog eens toevoegen.
+  const voegSamen = (huidig, nieuw) => {
+    const handmatig = (huidig || []).filter(t => t.bron !== TRANSACTIE_BRON);
+    const extra = nieuw.filter(n => !handmatig.some(h => h.datum === n.datum && Math.abs((h.totaal || 0) - n.totaal) < 1));
+    return [...handmatig, ...extra];
+  };
+
+  let bijgewerkt = 0, nieuw = 0;
+  for (const f of res.fondsen || []) {
+    const p = posities.find(x => f.isin && x.isin === f.isin) || posities.find(x => norm(x.naam) === norm(f.naam));
+    if (p) {
+      await db.posities.update(p.id, {
+        aankopen: voegSamen(p.aankopen, f.aankopen),
+        verkopen: voegSamen(p.verkopen, f.verkopen),
+        kosten: r2((p.kosten || 0) - (p.kosten_import || 0) + f.kosten),
+        kosten_import: f.kosten,
+      });
+      bijgewerkt++;
+    } else {
+      const tx = [...f.aankopen, ...f.verkopen][0] || {};
+      await db.posities.add({
+        id: genId(), rekeningId: rek.id, bankId: rek.bankId, year: String(jaar),
+        naam: f.naam, type: 'aandeel', isin: f.isin, ticker: '',
+        jan1_waarde: 0, dec31_waarde: 0, jan1_aantal: 0, jan1_prijs: 0, dec31_aantal: 0, dec31_prijs: 0,
+        aankopen: f.aankopen, verkopen: f.verkopen,
+        dividend: 0, rente: 0, kosten: f.kosten, kosten_import: f.kosten,
+        valuta: tx.valuta || 'EUR', jan1_koers_lokaal: 0, dec31_koers_lokaal: 0,
+      });
+      nieuw++;
+    }
+  }
+
+  // Kosten zonder fonds (aansluitingskosten beurzen e.d.) op een aparte regel
+  const alg = r2(res.totaalAlgemeneKosten || 0);
+  const kostenPos = posities.find(x => x.naam === ALGEMENE_KOSTEN_NAAM);
+  if (kostenPos) await db.posities.update(kostenPos.id, { kosten: alg });
+  else if (alg > 0) {
+    await db.posities.add({
+      id: genId(), rekeningId: rek.id, bankId: rek.bankId, year: String(jaar),
+      naam: ALGEMENE_KOSTEN_NAAM, type: 'overig', isin: '', ticker: '',
+      jan1_waarde: 0, dec31_waarde: 0, jan1_aantal: 0, jan1_prijs: 0, dec31_aantal: 0, dec31_prijs: 0,
+      aankopen: [], verkopen: [], dividend: 0, rente: 0, kosten: alg, valuta: 'EUR',
+    });
+  }
+
+  return { rekening: rek.naam, bijgewerkt, nieuw, ...res.samenvatting };
 }
 
 // ============ STUBS VOOR BACKWARD COMPAT ============

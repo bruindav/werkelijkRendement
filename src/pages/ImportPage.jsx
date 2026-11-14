@@ -1,4 +1,5 @@
-// Versie: Fix139
+// Versie: Fix171
+// Fix171 - DEGIRO rekeningoverzicht: aankopen, verkopen en kosten aanvullen; gedraaide (liggende) pagina's goed lezen
 // Fix102 - Multi-file import — meerdere PDF bestanden tegelijk
 // Fix104 - Mobiele import fix: files direct opslaan voor async (Android Chrome fix)
 // Fix105 - Gratis limiet: max 1 PDF
@@ -6,7 +7,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { pasProductsheetToe } from '../services/rekeningMeta';
-import { importeerBank, telJaarData, verwijderJaarData, jaarWaarschuwing } from '../hooks/useLocalDB';
+import { importeerBank, verwerkDegiroTransacties, telJaarData, verwijderJaarData, jaarWaarschuwing } from '../hooks/useLocalDB';
 import { parseerPDF, detectBankType } from '../services/pdfParser';
 import Layout from '../components/Layout';
 import Breadcrumb from '../components/Breadcrumb';
@@ -39,10 +40,13 @@ async function extractPDFText(file) {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
           const groepen = new Map();
+          // Fix171: liggende pagina (bv. DEGIRO rekeningoverzicht) via de viewport rechtzetten
+          const vp = (page.rotate || 0) % 360 !== 0 ? page.getViewport({ scale: 1 }) : null;
           for (const item of content.items) {
             if (!item.str.trim()) continue;
-            const y = Math.round(item.transform[5]);
-            const x = item.transform[4];
+            let x = item.transform[4], yRuw = item.transform[5];
+            if (vp) { const [vx, vy] = pdfjsLib.Util.applyTransform([x, yRuw], vp.transform); x = vx; yRuw = -vy; }
+            const y = Math.round(yRuw);
             if (!groepen.has(y)) groepen.set(y, []);
             groepen.get(y).push({ x, tekst: item.str });
           }
@@ -267,6 +271,7 @@ export default function ImportPage() {
     const jaren = new Set();
     for (const item of bestanden) {
       if (item.status !== 'herkend' || !item.resultaat) continue;
+      if (item.resultaat.type === 'degiro_transacties') continue; // vult alleen aan, wist niets
       if (item.resultaat.meerdere_jaren) {
         item.resultaat.jaren.forEach((j, i) => { if (item.geselecteerd[i]) jaren.add(j.jaar); });
       } else if (Object.values(item.geselecteerd || {}).some(Boolean)) {
@@ -306,14 +311,22 @@ export default function ImportPage() {
     const dubbel = [];
     const bijgewerkt = [];
     const sheets = [];
+    const transacties = [];
     const tel = (r) => { totaal += r.toegevoegd.length; dubbel.push(...r.overgeslagen); bijgewerkt.push(...(r.bijgewerkt || [])); return r; };
 
-    for (const item of bestanden) {
+    // Fix171: rekeningoverzichten als laatste, zodat het jaaroverzicht uit dezelfde batch er al staat
+    const volgorde = [...bestanden].sort((a, b) =>
+      (a.resultaat?.type === 'degiro_transacties') - (b.resultaat?.type === 'degiro_transacties'));
+    for (const item of volgorde) {
       if (item.status !== 'herkend' || !item.resultaat) continue;
       const { resultaat, geselecteerd, importJaar } = item;
 
       try {
-        if (resultaat.meerdere_jaren) {
+        if (resultaat.type === 'degiro_transacties') {
+          if (!geselecteerd[0]) continue;
+          const t = await verwerkDegiroTransacties(importJaar, resultaat);
+          transacties.push({ jaar: importJaar, ...t, waarschuwingen: resultaat.waarschuwingen || [] });
+        } else if (resultaat.meerdere_jaren) {
           const geselecteerdeJaren = resultaat.jaren.filter((_, i) => geselecteerd[i]);
           for (const { jaar, rekening } of geselecteerdeJaren) {
             tel(await importeerBank(jaar, { naam: resultaat.bank }, [rekening]));
@@ -348,7 +361,7 @@ export default function ImportPage() {
       }
     }
 
-    setImportResultaat({ totaal, dubbel, bijgewerkt, sheets });
+    setImportResultaat({ totaal, dubbel, bijgewerkt, sheets, transacties });
     setImportStatus('klaar');
   };
 
@@ -374,7 +387,7 @@ export default function ImportPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">Jaaroverzichten importeren</h1>
-            <p className="text-sm text-slate-400">Upload meerdere PDF's tegelijk — Centraal Beheer, ING, Raisin, DEGIRO, Evi, ABN AMRO, Meewind, Collin</p>
+            <p className="text-sm text-slate-400">Upload meerdere PDF's tegelijk — Centraal Beheer, ING, Raisin, DEGIRO (jaaroverzicht + rekeningoverzicht), Evi, ABN AMRO, Meewind, Collin</p>
           </div>
         </div>
 
@@ -460,9 +473,18 @@ export default function ImportPage() {
               <CheckCircle size={20} className="text-emerald-400" />
               <p className="text-white font-medium">Import geslaagd!</p>
             </div>
-            <p className="text-sm text-emerald-300/80 mb-4">
-              {importResultaat.totaal} rekening(en) geïmporteerd.
-            </p>
+            {(importResultaat.totaal > 0 || !importResultaat.transacties?.length) && (
+              <p className="text-sm text-emerald-300/80 mb-4">
+                {importResultaat.totaal} rekening(en) geïmporteerd.
+              </p>
+            )}
+            {importResultaat.transacties?.map((t, i) => (
+              <div key={i} className="text-sm text-emerald-300/80 mb-3">
+                <p className="text-emerald-400">✓ DEGIRO transacties {t.jaar} verwerkt in {t.rekening}: {t.bijgewerkt} fonds(en) bijgewerkt{t.nieuw ? `, ${t.nieuw} nieuw` : ''}.</p>
+                <p>Aankopen {fmt(t.aankopen)} · verkopen {fmt(t.verkopen)} · kosten {fmt(t.kosten)}</p>
+                {t.waarschuwingen.map((w, j) => <p key={j} className="text-amber-300">⚠️ {w}</p>)}
+              </div>
+            ))}
             {importResultaat.sheets?.length > 0 && (
               <p className="text-sm text-emerald-400 mt-2">✓ Productsheet(s) verwerkt (start-/einddatum, inleg, rente, partnerbank): {importResultaat.sheets.join('; ')}.</p>
             )}
