@@ -644,6 +644,9 @@ function parseCollin(text) {
   const rcJanM  = text.match(/Stand 1-1-\d{4}\s+€\s*([\d.,]+)/);
   const rcDecM  = text.match(/Stand 31-12-\d{4}\s+€\s*([\d.,]+)/);
   const renteM  = text.match(/Ontvangen rente\s+€\s*([\d.,]+)/);
+  const beheerM = text.match(/Beheervergoeding[^\n€]*€\s*-?\s*([\d.,]+)/i);
+  const btwM    = text.match(/BTW[^\n€]*beheervergoeding[^\n€]*€\s*-?\s*([\d.,]+)/i);
+  const kostenCollin = Math.round(((beheerM ? parseBedrag(beheerM[1]) : 0) + (btwM ? parseBedrag(btwM[1]) : 0)) * 100) / 100;
 
   const rcJan  = rcJanM  ? parseBedrag(rcJanM[1])  : 0;
   const rcDec  = rcDecM  ? parseBedrag(rcDecM[1])  : 0;
@@ -669,7 +672,8 @@ function parseCollin(text) {
   const rekeningen = [];
 
   // Rekening courant alleen toevoegen als er saldo is
-  if (rcJan > 0 || rcDec > 0 || rente > 0) {
+  // (rente en kosten horen bij de leningen en staan op de investeringsportefeuille, zodat ze niet dubbel tellen)
+  if (rcJan > 0 || rcDec > 0) {
     rekeningen.push({
       naam: `Rekening Courant (${rekeningnummer})`,
       weergave_naam: 'Rekening Courant',
@@ -677,7 +681,7 @@ function parseCollin(text) {
       rekeningnummer,
       jan1_saldo: rcJan,
       dec31_saldo: rcDec,
-      ontvangen_rente: rente,
+      ontvangen_rente: 0,
       rente_pct: 0,
       kosten: 0,
       notitie: 'Collin Crowdfund rekening-courant',
@@ -697,9 +701,11 @@ function parseCollin(text) {
       jan1_aantal: 0, jan1_prijs: 0,
       dec31_waarde: decWaarde,
       dec31_aantal: 0, dec31_prijs: 0,
-      aankopen_totaal: aankopen,
-      verkopen_totaal: verkopen,
-      dividend: rente,
+      aankopen: aankopen > 0 ? [{ datum: `${jaar}-01-01`, aantal: 0, prijs: 0, totaal: aankopen }] : [],
+      verkopen: verkopen > 0 ? [{ datum: `${jaar}-12-31`, aantal: 0, prijs: 0, totaal: verkopen }] : [],
+      dividend: 0,
+      rente,
+      kosten: kostenCollin,
     }]
   });
 
