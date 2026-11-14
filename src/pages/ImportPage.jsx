@@ -1,4 +1,5 @@
-// Versie: Fix171
+// Versie: Fix172
+// Fix172 - DEGIRO rekeningoverzicht: dividend per fonds, waarschuwing bij afwijking jaaroverzicht
 // Fix171 - DEGIRO rekeningoverzicht: aankopen, verkopen en kosten aanvullen; gedraaide (liggende) pagina's goed lezen
 // Fix102 - Multi-file import — meerdere PDF bestanden tegelijk
 // Fix104 - Mobiele import fix: files direct opslaan voor async (Android Chrome fix)
@@ -325,7 +326,7 @@ export default function ImportPage() {
         if (resultaat.type === 'degiro_transacties') {
           if (!geselecteerd[0]) continue;
           const t = await verwerkDegiroTransacties(importJaar, resultaat);
-          transacties.push({ jaar: importJaar, ...t, waarschuwingen: resultaat.waarschuwingen || [] });
+          transacties.push({ jaar: importJaar, ...t, waarschuwingen: [...(resultaat.waarschuwingen || []), ...(t.waarschuwingen || [])] });
         } else if (resultaat.meerdere_jaren) {
           const geselecteerdeJaren = resultaat.jaren.filter((_, i) => geselecteerd[i]);
           for (const { jaar, rekening } of geselecteerdeJaren) {
@@ -481,7 +482,7 @@ export default function ImportPage() {
             {importResultaat.transacties?.map((t, i) => (
               <div key={i} className="text-sm text-emerald-300/80 mb-3">
                 <p className="text-emerald-400">✓ DEGIRO transacties {t.jaar} verwerkt in {t.rekening}: {t.bijgewerkt} fonds(en) bijgewerkt{t.nieuw ? `, ${t.nieuw} nieuw` : ''}.</p>
-                <p>Aankopen {fmt(t.aankopen)} · verkopen {fmt(t.verkopen)} · kosten {fmt(t.kosten)}</p>
+                <p>Aankopen {fmt(t.aankopen)} · verkopen {fmt(t.verkopen)} · dividend {fmt(t.dividend)} · kosten {fmt(t.kosten)}</p>
                 {t.waarschuwingen.map((w, j) => <p key={j} className="text-amber-300">⚠️ {w}</p>)}
               </div>
             ))}

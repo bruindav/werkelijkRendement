@@ -1,4 +1,4 @@
-// Versie: Fix171
+// Versie: Fix172
 // Fix109 - Valuta velden opslaan bij import
 // Fix105 - Gratis limieten ingebouwd in voegBankToe en voegRekeningToe
 // Lokale database hooks — vervangt useFirestore.js
@@ -577,6 +577,8 @@ export async function verwerkDegiroTransacties(jaar, res) {
         verkopen: voegSamen(p.verkopen, f.verkopen),
         kosten: r2((p.kosten || 0) - (p.kosten_import || 0) + f.kosten),
         kosten_import: f.kosten,
+        dividend: r2((p.dividend || 0) - (p.dividend_import || 0) + (f.dividend || 0)),
+        dividend_import: f.dividend || 0,
       });
       bijgewerkt++;
     } else {
@@ -586,7 +588,7 @@ export async function verwerkDegiroTransacties(jaar, res) {
         naam: f.naam, type: 'aandeel', isin: f.isin, ticker: '',
         jan1_waarde: 0, dec31_waarde: 0, jan1_aantal: 0, jan1_prijs: 0, dec31_aantal: 0, dec31_prijs: 0,
         aankopen: f.aankopen, verkopen: f.verkopen,
-        dividend: 0, rente: 0, kosten: f.kosten, kosten_import: f.kosten,
+        dividend: f.dividend || 0, dividend_import: f.dividend || 0, rente: 0, kosten: f.kosten, kosten_import: f.kosten,
         valuta: tx.valuta || 'EUR', jan1_koers_lokaal: 0, dec31_koers_lokaal: 0,
       });
       nieuw++;
@@ -606,7 +608,24 @@ export async function verwerkDegiroTransacties(jaar, res) {
     });
   }
 
-  return { rekening: rek.naam, bijgewerkt, nieuw, ...res.samenvatting };
+  // Fix172: dividend per fonds uit de transacties vervangt het totaalbedrag uit het jaaroverzicht
+  const waarschuwingen = [];
+  const divTrans = r2(res.samenvatting?.dividend || 0);
+  if (divTrans > 0) {
+    const inkPos = posities.find(x => x.naam === INKOMSTEN_POSITIE_NAAM);
+    const divJaar = r2(rek.dividend_jaaroverzicht ?? inkPos?.dividend ?? 0);
+    if (rek.dividend_jaaroverzicht == null) await db.rekeningen.update(rek.id, { dividend_jaaroverzicht: divJaar });
+    if (inkPos) {
+      if ((inkPos.rente || 0) > 0.005) await db.posities.update(inkPos.id, { dividend: 0 });
+      else await db.posities.delete(inkPos.id);
+    }
+    if (divJaar > 0 && Math.abs(divTrans - divJaar) >= 1) {
+      const f = (n) => `€ ${n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      waarschuwingen.push(`Dividend uit de transacties (${f(divTrans)}) wijkt ${f(Math.abs(divTrans - divJaar))} af van het jaaroverzicht (${f(divJaar)}). De bedragen per fonds uit de transacties zijn gebruikt.`);
+    }
+  }
+
+  return { rekening: rek.naam, bijgewerkt, nieuw, waarschuwingen, ...res.samenvatting };
 }
 
 // ============ STUBS VOOR BACKWARD COMPAT ============

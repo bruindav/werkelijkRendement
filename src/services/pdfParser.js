@@ -1,4 +1,4 @@
-// Versie: Fix171
+// Versie: Fix172
 // PDF Parser - volledig client-side met pdf.js
 // Herkent: Centraal Beheer (sparen/deposito), Raisin, ABN AMRO, Evi (Van Lanschot)
 // Fix101 - ABN AMRO parser herschreven voor nieuw PDF-formaat 2025
@@ -637,6 +637,7 @@ function parseDegiro(text) {
 }
 
 // ============ DEGIRO REKENINGOVERZICHT (transacties) ============
+// Fix172: ook bruto dividend per fonds (incl. kapitaalsuitkeringen en correcties), omgerekend naar EUR
 // Fix171: haalt per fonds (ISIN) de aankopen, verkopen en transactiekosten uit het rekeningoverzicht,
 // plus algemene kosten zonder fonds (zoals aansluitingskosten beurzen). Bedragen in EUR.
 function parseDegiroTransacties(text) {
@@ -670,11 +671,23 @@ function parseDegiroTransacties(text) {
 
   const fondsen = new Map();   // isin -> { naam, isin, aankopen, verkopen, kosten }
   const fonds = (r) => {
-    if (!fondsen.has(r.isin)) fondsen.set(r.isin, { naam: r.product, isin: r.isin, aankopen: [], verkopen: [], kosten: 0 });
+    if (!fondsen.has(r.isin)) fondsen.set(r.isin, { naam: r.product, isin: r.isin, aankopen: [], verkopen: [], kosten: 0, dividend: 0 });
     return fondsen.get(r.isin);
   };
   const algemeneKosten = [];
   const waarschuwingen = [];
+
+  // Wisselkoers voor vreemde valuta: eerstvolgende omwisseling (Valuta Debitering met FX) op of na de datum
+  const fxRijen = rijen.filter(x => x.fx > 0 && /^Valuta/i.test(x.omschrijving));
+  const naarEur = (r) => {
+    if (r.valuta === 'EUR') return r.bedrag;
+    const zelfde = fxRijen.filter(x => x.valuta === r.valuta).sort((a, b) => a.datum.localeCompare(b.datum));
+    const fx = (zelfde.find(x => x.datum >= r.datum) || zelfde[zelfde.length - 1])?.fx;
+    if (!fx) { waarschuwingen.push(`${r.product} ${r.datum}: geen wisselkoers ${r.valuta} gevonden`); return 0; }
+    return r.bedrag / fx;
+  };
+  // Uitkeringen die als dividend tellen (bruto; belasting-regels niet)
+  const IS_DIVIDEND = /^(Dividend|Dividend Herinvestering|Kapitaalsuitkering|QIE Distribution Capital Gain)$/i;
 
   for (const r of rijen) {
     const trade = r.omschrijving.match(/\b(Koop|Verkoop)\s+([\d.]+(?:,\d+)?)\s+@\s+([\d.]+(?:,\d+)?)\s+([A-Z]{3})/);
@@ -700,6 +713,10 @@ function parseDegiroTransacties(text) {
       fonds(r)[soort === 'Koop' ? 'aankopen' : 'verkopen'].push(tx);
       continue;
     }
+    if (r.isin && IS_DIVIDEND.test(r.omschrijving)) {
+      fonds(r).dividend += naarEur(r);
+      continue;
+    }
     if (/kosten/i.test(r.omschrijving) && r.bedrag !== 0) {
       const eurBedrag = r.valuta === 'EUR' ? -r.bedrag : (r.fx ? -r.bedrag / r.fx : -r.bedrag);
       if (r.isin) fonds(r).kosten = r2(fonds(r).kosten + eurBedrag);
@@ -707,13 +724,15 @@ function parseDegiroTransacties(text) {
     }
   }
 
-  const fondsLijst = [...fondsen.values()].filter(f => f.aankopen.length || f.verkopen.length || f.kosten);
+  for (const f of fondsen.values()) f.dividend = r2(f.dividend);
+  const fondsLijst = [...fondsen.values()].filter(f => f.aankopen.length || f.verkopen.length || f.kosten || f.dividend);
   const totaalAlgemeen = r2(algemeneKosten.reduce((t, k) => t + k.bedrag, 0));
   const som = (lijst, key) => r2(lijst.reduce((t, f) => t + f[key].reduce((s, x) => s + x.totaal, 0), 0));
   const samenvatting = {
     aankopen: som(fondsLijst, 'aankopen'),
     verkopen: som(fondsLijst, 'verkopen'),
     kosten: r2(fondsLijst.reduce((t, f) => t + f.kosten, 0) + totaalAlgemeen),
+    dividend: r2(fondsLijst.reduce((t, f) => t + f.dividend, 0)),
   };
   const fmtE = (n) => `€ ${n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -722,7 +741,7 @@ function parseDegiroTransacties(text) {
     fondsen: fondsLijst, algemeneKosten, totaalAlgemeneKosten: totaalAlgemeen, samenvatting, waarschuwingen,
     // Eén regel voor de importkaart (selectie aan/uit)
     rekeningen: [{
-      naam: `Transacties: aankopen ${fmtE(samenvatting.aankopen)}, verkopen ${fmtE(samenvatting.verkopen)}, kosten ${fmtE(samenvatting.kosten)}`,
+      naam: `Transacties: aankopen ${fmtE(samenvatting.aankopen)}, verkopen ${fmtE(samenvatting.verkopen)}, dividend ${fmtE(samenvatting.dividend)}, kosten ${fmtE(samenvatting.kosten)}`,
       type: 'aanvulling',
     }],
   };
